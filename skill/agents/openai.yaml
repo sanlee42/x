@@ -1,0 +1,7 @@
+interface:
+  display_name: "x"
+  short_description: "Run the repository CTO-to-code loop"
+  default_prompt: "Use $x cto to turn this repository goal into root/CTO co-creation, an accepted CTO Intake Brief, a Technical Contract, Engineer Tasks, implementation/fix iterations, subagent packages, review findings, and a merge-back recommendation."
+
+policy:
+  allow_implicit_invocation: true
