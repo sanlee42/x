@@ -6,6 +6,17 @@ from pathlib import Path
 from x_state_common import *
 
 
+def print_project_binding(root: Path) -> None:
+    print("# x Project")
+    print(f"Repo Root: {root}")
+    print(f"Project Key: {project_key(root)}")
+    print(f"Runtime Dir: {project_state_dir(root)}")
+    profile = project_profile_path(root)
+    profile_status = "present" if profile.exists() else "missing"
+    print(f"Project Profile: {profile_status} ({profile.relative_to(root)})")
+    print()
+
+
 def command_start(args: argparse.Namespace) -> None:
     root = repo_root(Path.cwd())
     run_slug = args.short_goal or slug(args.goal, "run")
@@ -43,6 +54,7 @@ def command_start(args: argparse.Namespace) -> None:
 
 def command_status(args: argparse.Namespace) -> None:
     root = repo_root(Path.cwd())
+    print_project_binding(root)
     ledger = ledger_path(root)
     if ledger.exists():
         text = ledger.read_text(encoding="utf-8")
@@ -69,6 +81,46 @@ def command_status(args: argparse.Namespace) -> None:
             if marker >= 0:
                 print()
                 print(run_text[marker:].split("\n## ", 1)[0].strip())
+
+
+def command_doctor(args: argparse.Namespace) -> None:
+    root = repo_root(Path.cwd())
+    print("# x Doctor")
+    print(f"Repo Root: {root}")
+    print(f"Project Key: {project_key(root)}")
+    print(f"Runtime Dir: {project_state_dir(root)}")
+    print(f"X_HOME: {x_home()}")
+    print(f"CODEX_HOME: {codex_home()}")
+    print()
+    print("## Project Context")
+    report_path("PROJECT_CONSTRAINTS.md", root / "PROJECT_CONSTRAINTS.md")
+    report_path("AGENTS.md", root / "AGENTS.md")
+    report_path(".x/project/profile.md", project_profile_path(root))
+    print()
+    print("## Runtime State")
+    report_path("runtime dir", project_state_dir(root))
+    report_path("ledger", ledger_path(root))
+    print()
+    print("## Global Install")
+    report_link("skill x", codex_home() / "skills/x", SKILL_DIR)
+    report_link("agent cto", codex_home() / "agents/cto.toml", SKILL_DIR.parents[0] / "agents/cto.toml")
+    report_link("agent engineer", codex_home() / "agents/engineer.toml", SKILL_DIR.parents[0] / "agents/engineer.toml")
+    report_link("agent reviewer", codex_home() / "agents/reviewer.toml", SKILL_DIR.parents[0] / "agents/reviewer.toml")
+
+
+def report_path(label: str, path: Path) -> None:
+    status = "ok" if path.exists() else "missing"
+    print(f"- {label}: {status} ({path})")
+
+
+def report_link(label: str, path: Path, expected: Path) -> None:
+    if path.is_symlink():
+        target = path.resolve()
+        status = "ok" if target == expected.resolve() else "mismatch"
+        print(f"- {label}: {status} ({path} -> {target})")
+        return
+    status = "present" if path.exists() else "missing"
+    print(f"- {label}: {status} ({path}; expected -> {expected})")
 
 
 def command_resume(args: argparse.Namespace) -> None:

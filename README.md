@@ -42,6 +42,7 @@ Restart Codex after installing if the current session does not discover new skil
 From a product repo:
 
 ```bash
+python ~/.codex/skills/x/scripts/x_state.py doctor
 python ~/.codex/skills/x/scripts/x_state.py status
 ```
 
@@ -66,3 +67,5 @@ Override the runtime root:
 ```bash
 X_HOME=/tmp/x-runtime python ~/.codex/skills/x/scripts/x_state.py status
 ```
+
+`status` prints the current repo root, project key, runtime directory, and project profile path before showing run state. `doctor` prints the same binding plus install diagnostics for the global skill and agent symlinks.

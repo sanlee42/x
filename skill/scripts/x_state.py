@@ -29,6 +29,9 @@ def build_parser() -> argparse.ArgumentParser:
     status.add_argument("--run-id")
     status.set_defaults(func=command_status)
 
+    doctor = sub.add_parser("doctor", help="show x project binding and install diagnostics")
+    doctor.set_defaults(func=command_doctor)
+
     resume = sub.add_parser("resume", help="print compact context for resuming a run")
     resume.add_argument("--run-id")
     resume.set_defaults(func=command_resume)

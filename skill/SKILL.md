@@ -126,10 +126,16 @@ For `$x cto: <goal>`:
 
 ## Status and Resume
 
-For `x status`, do not re-plan. Read state only:
+For `x status`, do not re-plan. Read state only. The output starts with the current repo root, project key, runtime directory, and project profile path:
 
 ```bash
 python ~/.codex/skills/x/scripts/x_state.py status
+```
+
+For `x doctor`, check project binding and local install diagnostics before starting work in an unfamiliar repo:
+
+```bash
+python ~/.codex/skills/x/scripts/x_state.py doctor
 ```
 
 For `x resume`, continue from `Next Operating Actions` / `Next Action`:

@@ -51,6 +51,10 @@ def x_home() -> Path:
     return Path(os.environ.get("X_HOME", "~/.x")).expanduser()
 
 
+def codex_home() -> Path:
+    return Path(os.environ.get("CODEX_HOME", "~/.codex")).expanduser()
+
+
 def git_worktree_project_name(root: Path) -> str | None:
     git_file = root / ".git"
     if not git_file.is_file():
@@ -79,7 +83,7 @@ def project_key(root: Path) -> str:
 
 
 def state_dirs(root: Path) -> dict[str, Path]:
-    base = x_home() / "projects" / project_key(root)
+    base = project_state_dir(root)
     return {
         "ledger": base / "ledger",
         "runs": base / "runs",
@@ -92,6 +96,14 @@ def state_dirs(root: Path) -> dict[str, Path]:
         "decisions": base / "decisions",
         "risks": base / "risks",
     }
+
+
+def project_state_dir(root: Path) -> Path:
+    return x_home() / "projects" / project_key(root)
+
+
+def project_profile_path(root: Path) -> Path:
+    return root / ".x/project/profile.md"
 
 
 def ledger_path(root: Path) -> Path:
