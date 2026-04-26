@@ -7,6 +7,7 @@ import argparse
 import sys
 
 from x_state_brief import command_brief
+from x_state_audit import command_audit
 from x_state_cleanup import command_cleanup_worktrees
 from x_state_commands import *
 from x_state_directives import command_architect_directive
@@ -563,6 +564,13 @@ def build_parser() -> argparse.ArgumentParser:
     cleanup.add_argument("--run-id", required=True)
     cleanup.add_argument("--apply", action="store_true")
     cleanup.set_defaults(func=command_cleanup_worktrees)
+
+    audit = sub.add_parser("audit", help="audit one run from x state and Codex local usage data")
+    audit.add_argument("--run-id", required=True)
+    audit.add_argument("--json", action="store_true")
+    audit.add_argument("--write", action="store_true")
+    audit.add_argument("--codex-state")
+    audit.set_defaults(func=command_audit)
 
     return parser
 

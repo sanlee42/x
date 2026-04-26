@@ -144,6 +144,7 @@ def state_dirs(root: Path) -> dict[str, Path]:
         "decisions": base / "decisions",
         "risks": base / "risks",
         "messages": base / "messages",
+        "audits": base / "audits",
         "discussions": base / "discussions",
         "role-briefs": base / "role-briefs",
         "architect-intakes": base / "architect-intakes",

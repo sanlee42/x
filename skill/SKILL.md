@@ -52,7 +52,11 @@ Mention that `x_state.py` commands are internal state tools, not root-facing com
 
 ## Fresh Instruction Reload
 
-At the start of every non-help `$x architect`, `$x discussion`, `$x with <role>`, `$x council`, `$x product`, `$x technical`, `$x strategy`, `$x status`, `$x resume`, `$x checkpoint`, or `$x close` turn, main agent must reread the currently installed `~/.codex/skills/x/SKILL.md`, relevant role prompts from `~/.codex/agents/`, and configured interaction role cards before deciding what to do. Do not rely on stale remembered x workflow rules.
+At the start of every non-help `$x architect`, `$x discussion`, `$x with <role>`, `$x council`, `$x product`, `$x technical`, `$x strategy`, `$x status`, `$x resume`, `$x checkpoint`, or `$x close` turn, main agent must reread the currently installed `~/.codex/skills/x/SKILL.md` before deciding what to do. Do not rely on stale remembered x workflow rules.
+
+For `$x architect`, execution-oriented `$x resume`, lane work, reviews, integration, or close decisions, main agent must also reread the relevant installed execution role prompts from `~/.codex/agents/` (`architect.toml`, `engineer.toml`, `reviewer.toml`) before using those roles.
+
+For `$x discussion`, `$x with <role>`, `$x council`, `$x product`, `$x technical`, `$x strategy`, `$x challenger`, and other root-facing interaction turns, the role sources are configurable markdown role cards, not global agent prompt files. Main agent must read the configured interaction role cards from runtime state or default skill assets. Do not look for `product.toml`, `technical.toml`, `strategy.toml`, `challenger.toml`, or `councilor.toml` under `~/.codex/agents/`; their absence is expected and is not an install failure.
 
 Newly spawned architect, engineer, and reviewer agents must use the latest installed prompts. If a role agent was spawned before the latest x instruction change, treat its output as potentially stale for changed workflow behavior and use a fresh role package/subagent for decisions affected by the change.
 

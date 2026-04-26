@@ -20,6 +20,8 @@ Runtime state is written outside product repos:
 ~/.x/projects/<project-key>/
 ```
 
+The runtime tree holds markdown state for ledger, runs, interactions, role cards, role briefs, architect intakes, boards, briefs, contracts, execution plans, lanes, tasks, attempts, reviews, architect reviews, directives, packages, mailbox messages, decisions, risks, and optional run audits.
+
 Project-specific context stays in the product repo:
 
 ```text
@@ -129,26 +131,36 @@ Lane worktrees default to `.dev/<scope>-<lane-id>`, while lane state is stored a
 
 `lane-update` records advisory heartbeat state only. It surfaces current activity, blocker, next action, and architect attention labels in `lane-status`, `status`, and architect packages, but it does not change canonical lane `Status`.
 
+Use the mailbox for lightweight cross-lane or cross-role coordination that should be visible to main and architect:
+
+```bash
+python ~/.codex/skills/x/scripts/x_state.py mailbox-send --run-id <run-id> --kind request --from main --to architect --summary "<summary>" --body "<details>"
+python ~/.codex/skills/x/scripts/x_state.py mailbox-list --run-id <run-id>
+python ~/.codex/skills/x/scripts/x_state.py mailbox-resolve --run-id <run-id> --message-id <message-id> --status addressed --resolution "<resolution>"
+```
+
+Mailbox message kinds are `request`, `response`, `artifact-ready`, `interface-change`, `blocker`, `directive`, and `ack`. `status` includes open mailbox messages for the selected run; mailbox messages are coordination context, not gates by themselves.
+
 Start an implementation attempt and generate the engineer package:
 
 ```bash
-python ~/.codex/skills/x/scripts/x_state.py attempt-start --task-id <task-id> --kind implementation --title "<attempt>"
-python ~/.codex/skills/x/scripts/x_state.py package --role engineer --task-id <task-id> --attempt-id <attempt-id>
+python ~/.codex/skills/x/scripts/x_state.py attempt-start --task-id <task-id> --lane-id <lane-id> --kind implementation --title "<attempt>"
+python ~/.codex/skills/x/scripts/x_state.py package --role engineer --run-id <run-id> --task-id <task-id> --attempt-id <attempt-id>
 ```
 
 After attempt evidence is recorded, generate the reviewer package and record the review:
 
 ```bash
 python ~/.codex/skills/x/scripts/x_state.py attempt-result --attempt-id <attempt-id> --changed-files "<files>" --summary "<summary>" --verification "<results>" --residual-risk "<risk>"
-python ~/.codex/skills/x/scripts/x_state.py package --role reviewer --task-id <task-id> --attempt-id <attempt-id>
-python ~/.codex/skills/x/scripts/x_state.py review --attempt-id <attempt-id> --title "<review>" --summary "<summary>" --recommendation ready --reviewed-diff "<diff>" --verification "<assessment>"
+python ~/.codex/skills/x/scripts/x_state.py package --role reviewer --run-id <run-id> --task-id <task-id> --attempt-id <attempt-id>
+python ~/.codex/skills/x/scripts/x_state.py review --run-id <run-id> --attempt-id <attempt-id> --title "<review>" --summary "<summary>" --recommendation ready --reviewed-diff "<diff>" --verification "<assessment>"
 ```
 
 Reviewer `ready` is not integration approval. The architect must review the ready attempt against the execution plan, architecture fit, code abstraction, maintainability, performance, correctness, security/privacy, observability, verification quality, product acceptance, and integration risk before the main agent integrates the lane:
 
 ```bash
-python ~/.codex/skills/x/scripts/x_state.py architect-review --lane-id <lane-id> --attempt-id <attempt-id> --title "<review>" --summary "<summary>" --recommendation merge-ok --criteria "<criteria>" --verification "<assessment>" --integration-risk "<risk>"
-python ~/.codex/skills/x/scripts/x_state.py integrate --lane-id <lane-id>
+python ~/.codex/skills/x/scripts/x_state.py architect-review --run-id <run-id> --lane-id <lane-id> --attempt-id <attempt-id> --title "<review>" --summary "<summary>" --recommendation merge-ok --criteria "<criteria>" --verification "<assessment>" --integration-risk "<risk>"
+python ~/.codex/skills/x/scripts/x_state.py integrate --run-id <run-id> --lane-id <lane-id>
 python ~/.codex/skills/x/scripts/x_state.py execution-plan --run-id <run-id> --plan-id <plan-id> --final-verification-status green --final-verification "<commands and observed output>"
 python ~/.codex/skills/x/scripts/x_state.py gate --mode merge-ready --run-id <run-id>
 ```
@@ -166,6 +178,20 @@ python ~/.codex/skills/x/scripts/x_state.py architect-directive --run-id <run-id
 Directive actions are `continue`, `parallelism-adjustment`, `verification-adjustment`, `pause-lane`, `resume-lane`, `replan`, `root-decision`, and `request-more-evidence`. `parallelism-adjustment`, `verification-adjustment`, and `request-more-evidence` default to open, non-blocking directives. Open `pause-lane` and `replan` directives block lower lane work; open `root-decision` directives block accepted close. Architect packages include a control board with run, plan, lane, review, lane heartbeat, attention, and open directive state.
 
 Architect should also observe execution before final review. Main should generate architect observation packages when heartbeats are stale or blocked, safe parallelism is underused, lane activity suggests scope drift, multiple lanes touch shared files or interfaces, verification/product acceptance evidence is weak, repeated fix loops suggest plan mismatch, quota/context risk appears, or a large integration batch is about to proceed. Architect responds with continue, parallelism or verification adjustments, directives, replan/root-decision, or requests for more evidence.
+
+## Run Audit
+
+`audit` is a read-only run report by default. It combines existing `x` markdown state with local Codex thread usage from `~/.codex/state_5.sqlite`:
+
+```bash
+python ~/.codex/skills/x/scripts/x_state.py audit --run-id <run-id>
+python ~/.codex/skills/x/scripts/x_state.py audit --run-id <run-id> --json
+python ~/.codex/skills/x/scripts/x_state.py audit --run-id <run-id> --write
+```
+
+The report includes run status and duration, gate status, base/head scale, commit count, diff shortstat, changed-file count, workflow counts, lane integration counts, and token totals by package role. `--write` stores the Markdown report at `~/.x/projects/<project-key>/audits/<run-id>.md`; otherwise audit does not mutate runtime state. `--codex-state <path>` can point at a test or alternate Codex sqlite file.
+
+Token accounting is strict. A package is counted only when exactly one Codex thread title or first user message matches the full package path, `/packages/<package-id>.md`, or the complete package id with boundaries. Missing or ambiguous matches are listed as unresolved and are not included in token totals.
 
 ## Root Interaction And Acceptance
 
@@ -188,3 +214,12 @@ X_HOME=/tmp/x-runtime python ~/.codex/skills/x/scripts/x_state.py status
 ```
 
 `status` prints the current repo root, project key, runtime directory, and project profile path before showing run state. `doctor` prints the same binding plus install diagnostics for the global skill and agent symlinks.
+
+After accepted close or a completed integration, clean lane worktrees with an explicit dry-run followed by apply:
+
+```bash
+python ~/.codex/skills/x/scripts/x_state.py cleanup-worktrees --run-id <run-id>
+python ~/.codex/skills/x/scripts/x_state.py cleanup-worktrees --run-id <run-id> --apply
+```
+
+Cleanup only removes integrated, clean, registered lane worktrees whose git common dir matches the run. It does not remove the integration worktree or any active, paused, blocked, dirty, missing, duplicate, or mismatched lane worktree.

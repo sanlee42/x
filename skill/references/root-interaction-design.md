@@ -39,7 +39,9 @@ Roles are configurable markdown cards under runtime state:
 ~/.x/projects/<project-key>/roles/<role>.md
 ```
 
-Default role-card templates are provided for `strategy`, `technical`, `product`, `challenger`, and `architect`. Root can ask main to add or modify roles such as `ops`, `data`, `growth`, or `support`; main records them with:
+Default role-card templates are provided for `strategy`, `technical`, `product`, `challenger`, and `architect`. These interaction role cards are distinct from the installed execution agent prompts under `~/.codex/agents/`. Council and interaction turns should not expect global `product.toml`, `technical.toml`, `strategy.toml`, `challenger.toml`, or `councilor.toml` files; those roles are loaded from markdown role cards.
+
+Root can ask main to add or modify roles such as `ops`, `data`, `growth`, or `support`; main records them with:
 
 ```bash
 python ~/.codex/skills/x/scripts/x_state.py role-list
