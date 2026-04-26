@@ -1,11 +1,21 @@
 # x Run: {run_id}
 
 Status: {status}
+Run Mode: {run_mode}
 Current Phase: {phase}
 Needs User: {needs_user}
 Created At: {created_at}
 Updated At: {updated_at}
 Gate Status: not-run
+Architect Gate Status: not-run
+Control Root: {control_root}
+Control Branch: {control_branch}
+Git Common Dir: {git_common_dir}
+Base Commit: {base_commit}
+Execution Status: {execution_status}
+Execution Worktree: {execution_worktree}
+Execution Branch: {execution_branch}
+Execution Base: {execution_base}
 
 ## Root Directive
 
@@ -27,7 +37,7 @@ Gate Status: not-run
 
 -
 
-## CTO Intake Brief
+## Architecture Brief
 
 Pending.
 
@@ -47,11 +57,27 @@ Pending.
 
 Pending.
 
-## Active Iteration
+## Architect Execution Plan
 
 Pending.
 
-## Subagent Packages
+## Architect Gate
+
+Pending.
+
+## Architect Directives
+
+Pending.
+
+## Lanes
+
+Pending.
+
+## Active Attempt
+
+Pending.
+
+## Packages
 
 Pending.
 
@@ -60,6 +86,14 @@ Pending.
 Pending.
 
 ## Review Findings
+
+Pending.
+
+## Architect Reviews
+
+Pending.
+
+## Integrated Lanes
 
 Pending.
 

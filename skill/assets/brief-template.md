@@ -1,4 +1,4 @@
-# x CTO Intake Brief: {brief_id}
+# x Architecture Brief: {brief_id}
 
 Status: {status}
 Date: {date}
@@ -9,9 +9,9 @@ Linked Package: {package_id}
 
 {directive}
 
-## CTO Questions
+## Architect Questions
 
-{cto_questions}
+{architect_questions}
 
 ## Options Considered
 

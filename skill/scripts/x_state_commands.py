@@ -4,11 +4,27 @@ import argparse
 from pathlib import Path
 
 from x_state_common import *
+from x_state_directives import mark_root_decision_directives_addressed
+from x_state_discussion import require_interaction_writable
+from x_state_execution import (
+    active_lane_for_task,
+    lane_heartbeats_summary,
+    lane_display_id,
+    lane_for_attempt,
+    mark_lane_attempt_result,
+    mark_lane_attempt_started,
+    require_architect_gate_passed,
+)
+from x_state_integration import execution_plan_merge_ready_failures
+from x_state_mailbox import open_mailbox_summary
 
 
 def print_project_binding(root: Path) -> None:
+    git_context = current_git_context(root)
     print("# x Project")
     print(f"Repo Root: {root}")
+    print(f"Current Branch: {git_context['branch']}")
+    print(f"Git Common Dir: {git_context['git_common_dir']}")
     print(f"Project Key: {project_key(root)}")
     print(f"Runtime Dir: {project_state_dir(root)}")
     profile = project_profile_path(root)
@@ -19,32 +35,43 @@ def print_project_binding(root: Path) -> None:
 
 def command_start(args: argparse.Namespace) -> None:
     root = repo_root(Path.cwd())
-    run_slug = args.short_goal or slug(args.goal, "run")
+    goal = (args.goal or "To be defined with architect.").strip()
+    run_slug = args.short_goal or slug(args.goal or "architect-room", "architect-room")
     run_id = args.run_id or f"{today()}-{run_slug}"
     run_path = unique_path(state_dirs(root)["runs"], run_id)
     final_run_id = run_path.stem
     timestamp = now()
-    directive = (args.directive or args.goal).strip()
-    next_action = "Do repo/context intake, then create a CTO package for root/CTO co-creation."
-    ledger = ensure_ledger(root, objective=args.goal.strip(), next_action=next_action, dry_run=args.dry_run)
+    directive = (args.directive or args.goal or "Open architect room with root; discover direction before execution.").strip()
+    next_action = "Do repo/context intake, then create an architect package for root/architect co-creation."
+    git_context = current_git_context(root)
+    ledger = ensure_ledger(root, objective=goal, next_action=next_action, dry_run=args.dry_run)
     if not args.dry_run:
         ledger_text = ledger.read_text(encoding="utf-8")
         ledger_text = replace_line(ledger_text, "Status: ", "active")
         ledger_text = replace_line(ledger_text, "Updated At: ", now())
-        ledger_text = replace_section(ledger_text, "Current Engineering Objective", args.goal.strip())
+        ledger_text = replace_section(ledger_text, "Current Engineering Objective", goal)
         ledger_text = replace_section(ledger_text, "Next Operating Actions", next_action)
         ledger_text = append_bullet(ledger_text, "Active Runs", final_run_id)
         save(ledger, ledger_text, args.dry_run)
     content = read_template(RUN_TEMPLATE).format(
         run_id=final_run_id,
         status="active",
+        run_mode="architect-room",
         phase="Repo Intake",
         needs_user="no",
         created_at=timestamp,
         updated_at=timestamp,
+        control_root=git_context["root"],
+        control_branch=git_context["branch"],
+        git_common_dir=git_context["git_common_dir"],
+        base_commit=git_context["base_commit"],
+        execution_status=UNMATERIALIZED,
+        execution_worktree=UNMATERIALIZED,
+        execution_branch=UNMATERIALIZED,
+        execution_base=f"{git_context['branch']}@{git_context['base_commit']}",
         directive=directive,
-        goal=args.goal.strip(),
-        success=(args.success or "Merge-ready branch with review evidence and merge-back recommendation.").strip(),
+        goal=goal,
+        success=(args.success or "Accepted architecture direction, materialized execution worktree, reviewed implementation evidence, and merge-back recommendation.").strip(),
         constraints=(args.constraints or "None specified.").strip(),
         blockers="None.",
         next_action=next_action,
@@ -66,27 +93,72 @@ def command_status(args: argparse.Namespace) -> None:
             if marker >= 0:
                 print()
                 print(text[marker:].split("\n## ", 1)[0].strip())
+    runs = active_runs(root)
+    if runs:
+        print()
+        print("## Active Run Bindings")
+        for item in sorted(runs, key=lambda p: p.name):
+            print(f"- {run_binding_summary(item)}")
     if args.run_id or state_dirs(root)["runs"].exists():
-        try:
-            run = resolve_run(root, args.run_id)
-        except SystemExit:
+        run = status_run(root, args.run_id)
+        if run is None:
             return
         run_text = run.read_text(encoding="utf-8")
         print()
         for line in run_text.splitlines():
-            if line.startswith(("# x Run:", "# x Engineering Run:", "Status:", "Current Phase:", "Needs User:", "Updated At:", "Gate Status:")):
+            if line.startswith(("# x Run:", "# x Engineering Run:", "Status:", "Run Mode:", "Current Phase:", "Needs User:", "Updated At:", "Gate Status:", "Architect Gate Status:", "Control Root:", "Control Branch:", "Execution Status:", "Execution Worktree:", "Execution Branch:")):
                 print(line)
-        for heading in ("CTO Intake Brief", "Repo Intake", "Codebase Findings", "Technical Contract", "Engineer Tasks", "Active Iteration", "Subagent Packages", "Task Results", "Review Findings", "Unresolved Reviews", "Merge Gate", "Merge-Back Recommendation", "Blockers", "Next Action"):
+        print()
+        print("## Lane Heartbeats")
+        print(lane_heartbeats_summary(root, run))
+        print()
+        print("## Open Mailbox")
+        print(open_mailbox_summary(root, run.stem))
+        for heading in ("Architecture Brief", "Repo Intake", "Codebase Findings", "Technical Contract", "Engineer Tasks", "Architect Execution Plan", "Architect Gate", "Architect Directives", "Lanes", "Active Attempt", "Packages", "Task Results", "Review Findings", "Architect Reviews", "Integrated Lanes", "Unresolved Reviews", "Merge Gate", "Merge-Back Recommendation", "Blockers", "Next Action"):
             marker = run_text.find(f"## {heading}")
             if marker >= 0:
                 print()
                 print(run_text[marker:].split("\n## ", 1)[0].strip())
 
 
+def run_binding_summary(run: Path) -> str:
+    text = run.read_text(encoding="utf-8")
+    status = header_value(text, "Status") or "active"
+    phase = header_value(text, "Current Phase") or "unknown"
+    goal = section_content(text, "Engineering Goal").splitlines()[0] if section_content(text, "Engineering Goal") else "No goal."
+    execution_status = header_value(text, "Execution Status") or UNMATERIALIZED
+    execution_worktree = header_value(text, "Execution Worktree") or UNMATERIALIZED
+    execution_branch = header_value(text, "Execution Branch") or UNMATERIALIZED
+    return f"{run.stem}: {status}/{phase}; execution={execution_status}; branch={execution_branch}; worktree={execution_worktree}; goal={goal}"
+
+
+def status_run(root: Path, run_id: str | None) -> Path | None:
+    if run_id:
+        return resolve_run(root, run_id)
+    runs = active_runs(root)
+    if not runs:
+        try:
+            return latest_run(root)
+        except SystemExit:
+            return None
+    current = root.resolve()
+    execution_matches = [run for run in runs if run_execution_worktree(run) == current]
+    if len(execution_matches) == 1:
+        return execution_matches[0]
+    if len(runs) == 1:
+        return runs[0]
+    print()
+    print("Multiple active runs are available; pass --run-id to show one run in detail.")
+    return None
+
+
 def command_doctor(args: argparse.Namespace) -> None:
     root = repo_root(Path.cwd())
+    git_context = current_git_context(root)
     print("# x Doctor")
     print(f"Repo Root: {root}")
+    print(f"Current Branch: {git_context['branch']}")
+    print(f"Git Common Dir: {git_context['git_common_dir']}")
     print(f"Project Key: {project_key(root)}")
     print(f"Runtime Dir: {project_state_dir(root)}")
     print(f"X_HOME: {x_home()}")
@@ -101,9 +173,17 @@ def command_doctor(args: argparse.Namespace) -> None:
     report_path("runtime dir", project_state_dir(root))
     report_path("ledger", ledger_path(root))
     print()
+    print("## Active Runs")
+    runs = active_runs(root)
+    if runs:
+        for run in sorted(runs, key=lambda p: p.name):
+            print(f"- {run_binding_summary(run)}")
+    else:
+        print("- none")
+    print()
     print("## Global Install")
     report_link("skill x", codex_home() / "skills/x", SKILL_DIR)
-    report_link("agent cto", codex_home() / "agents/cto.toml", SKILL_DIR.parents[0] / "agents/cto.toml")
+    report_link("agent architect", codex_home() / "agents/architect.toml", SKILL_DIR.parents[0] / "agents/architect.toml")
     report_link("agent engineer", codex_home() / "agents/engineer.toml", SKILL_DIR.parents[0] / "agents/engineer.toml")
     report_link("agent reviewer", codex_home() / "agents/reviewer.toml", SKILL_DIR.parents[0] / "agents/reviewer.toml")
 
@@ -139,9 +219,9 @@ def command_resume(args: argparse.Namespace) -> None:
             print(ledger_text[marker:].split("\n## ", 1)[0].strip())
     print()
     for line in run_text.splitlines():
-        if line.startswith(("# x Run:", "# x Engineering Run:", "Status:", "Current Phase:", "Needs User:", "Updated At:", "Gate Status:")):
+        if line.startswith(("# x Run:", "# x Engineering Run:", "Status:", "Run Mode:", "Current Phase:", "Needs User:", "Updated At:", "Gate Status:", "Architect Gate Status:", "Control Root:", "Control Branch:", "Execution Status:", "Execution Worktree:", "Execution Branch:")):
             print(line)
-    for heading in ("Root Directive", "Engineering Goal", "CTO Intake Brief", "Repo Intake", "Codebase Findings", "Technical Contract", "Engineer Tasks", "Active Iteration", "Subagent Packages", "Task Results", "Review Findings", "Unresolved Reviews", "Fix Loop", "Merge Gate", "Merge-Back Recommendation", "Blockers", "Next Action", "Last Checkpoint"):
+    for heading in ("Root Directive", "Engineering Goal", "Architecture Brief", "Repo Intake", "Codebase Findings", "Technical Contract", "Engineer Tasks", "Architect Execution Plan", "Architect Gate", "Architect Directives", "Lanes", "Active Attempt", "Packages", "Task Results", "Review Findings", "Architect Reviews", "Integrated Lanes", "Unresolved Reviews", "Fix Loop", "Merge Gate", "Merge-Back Recommendation", "Blockers", "Next Action", "Last Checkpoint"):
         marker = run_text.find(f"## {heading}")
         if marker >= 0:
             print()
@@ -161,6 +241,73 @@ def command_ledger(args: argparse.Namespace) -> None:
         save(path, text, args.dry_run)
 
 
+def command_materialize(args: argparse.Namespace) -> None:
+    root = repo_root(Path.cwd())
+    run = resolve_run(root, args.run_id)
+    run_id = run_id_from_path(run)
+    accepted_brief_with_direction(root, run_id)
+    scope = slug(args.scope, "worktree")
+    run_text = run.read_text(encoding="utf-8")
+    control_root = header_path(run_text, "Control Root") or root.resolve()
+    branch = args.branch or f"feat/{scope}"
+    worktree = Path(args.worktree).expanduser() if args.worktree else control_root / ".dev" / scope
+    if not worktree.is_absolute():
+        worktree = control_root / worktree
+    worktree = worktree.resolve()
+    base = args.base or header_value(run_text, "Control Branch") or "HEAD"
+
+    if run_is_materialized(run) and not args.reuse_worktree:
+        raise SystemExit(f"run {run_id} is already materialized; use --reuse-worktree to refresh binding")
+    if args.reuse_worktree:
+        if not worktree.exists():
+            raise SystemExit(f"--reuse-worktree requires an existing worktree: {worktree}")
+        assert_same_project_git_dir(control_root, worktree)
+    else:
+        if worktree.exists():
+            raise SystemExit(f"execution worktree already exists: {worktree}; use --reuse-worktree or choose another --scope")
+        if git_branch_exists(control_root, branch):
+            raise SystemExit(f"execution branch already exists: {branch}; use --reuse-worktree or choose another --branch")
+        if not args.dry_run:
+            subprocess.check_call(["git", "-C", str(control_root), "worktree", "add", str(worktree), "-b", branch, base])
+    git_context = current_git_context(worktree) if worktree.exists() else {
+        "root": str(worktree),
+        "branch": branch,
+        "base_commit": git_output(control_root, "rev-parse", base, default=header_value(run_text, "Base Commit") or "unknown"),
+        "git_common_dir": str(git_path(control_root, "rev-parse", "--git-common-dir")),
+    }
+    control_context = current_git_context(control_root)
+    new_text = update_header(run, phase="Materialized", needs_user=args.needs_user)
+    new_text = upsert_line_after(new_text, "Run Mode: ", header_value(new_text, "Run Mode") or "architect-room", "Status: ")
+    new_text = upsert_line_after(new_text, "Control Root: ", str(control_root), "Gate Status: ")
+    new_text = upsert_line_after(new_text, "Control Branch: ", control_context["branch"], "Control Root: ")
+    new_text = upsert_line_after(new_text, "Git Common Dir: ", control_context["git_common_dir"], "Control Branch: ")
+    new_text = upsert_line_after(new_text, "Base Commit: ", control_context["base_commit"], "Git Common Dir: ")
+    new_text = upsert_line_after(new_text, "Execution Status: ", MATERIALIZED, "Base Commit: ")
+    new_text = upsert_line_after(new_text, "Execution Worktree: ", str(worktree), "Execution Status: ")
+    new_text = upsert_line_after(new_text, "Execution Branch: ", git_context["branch"], "Execution Worktree: ")
+    new_text = upsert_line_after(new_text, "Execution Base: ", f"{base}@{git_context['base_commit']}", "Execution Branch: ")
+    new_text = replace_section(new_text, "Next Action", args.next_action or "Create Technical Contract, then Engineer Task, attempt, and packages.")
+    new_text = append_event_text(new_text, f"Execution worktree materialized: {worktree} ({git_context['branch']})")
+    save(run, new_text, args.dry_run)
+
+
+def git_branch_exists(root: Path, branch: str) -> bool:
+    result = subprocess.run(
+        ["git", "-C", str(root), "show-ref", "--verify", "--quiet", f"refs/heads/{branch}"],
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def assert_same_project_git_dir(control_root: Path, worktree: Path) -> None:
+    if not worktree.exists():
+        raise SystemExit(f"worktree does not exist: {worktree}")
+    expected = git_path(control_root, "rev-parse", "--git-common-dir")
+    actual = git_path(worktree, "rev-parse", "--git-common-dir")
+    if expected != actual:
+        raise SystemExit(f"worktree belongs to a different git common dir: {worktree} ({actual} != {expected})")
+
+
 def command_section(args: argparse.Namespace) -> None:
     root = repo_root(Path.cwd())
     path = resolve_run(root, args.run_id)
@@ -175,6 +322,9 @@ def command_contract(args: argparse.Namespace) -> None:
     run = resolve_run(root, args.run_id)
     run_id = run_id_from_path(run)
     brief = accepted_brief_for_run(root, run_id, args.brief_id)
+    direction = section_content(brief.read_text(encoding="utf-8"), "Accepted Direction")
+    if not has_content(direction):
+        raise SystemExit(f"accepted Architecture Brief has no accepted direction: {brief.stem}")
     contract_id = args.contract_id or f"{today()}-{slug(args.title, 'contract')}"
     contract_path = unique_path(state_dirs(root)["contracts"], contract_id)
     content = read_template(CONTRACT_TEMPLATE).format(
@@ -227,7 +377,7 @@ def command_task(args: argparse.Namespace) -> None:
     write(task_path, content, args.dry_run)
     run_text = update_header(run, phase="Engineering", needs_user=args.needs_user)
     run_text = append_bullet(run_text, "Engineer Tasks", f"{task_path.stem}: {args.title} ({args.status}, contract {contract_id})")
-    run_text = replace_section(run_text, "Next Action", args.next_action or f"Start implementation iteration for {task_path.stem}.")
+    run_text = replace_section(run_text, "Next Action", args.next_action or f"Start implementation attempt for {task_path.stem}.")
     run_text = append_event_text(run_text, f"Engineer Task created: {task_path.stem}")
     save(run, run_text, args.dry_run)
     ledger = ensure_ledger(root, dry_run=args.dry_run)
@@ -237,52 +387,79 @@ def command_task(args: argparse.Namespace) -> None:
         save(ledger, ledger_text, args.dry_run)
 
 
-def command_iteration_start(args: argparse.Namespace) -> None:
+def command_attempt_start(args: argparse.Namespace) -> None:
     root = repo_root(Path.cwd())
     task = resolve_state_file(root, "tasks", args.task_id)
     task_text = task.read_text(encoding="utf-8")
     run_id = header_value(task_text, "Linked Run")
     if not run_id:
         raise SystemExit(f"task missing Linked Run: {task.stem}")
-    if args.kind == "fix" and not args.source_review_id:
-        raise SystemExit("fix iteration requires --source-review-id")
+    if args.kind == "fix" and not (args.source_review_id or args.source_architect_review_id):
+        raise SystemExit("fix attempt requires --source-review-id or --source-architect-review-id")
+    if args.kind != "fix" and (args.source_review_id or args.source_architect_review_id):
+        raise SystemExit("--source-review-id and --source-architect-review-id are only valid for fix attempts")
+    if args.source_review_id and args.source_architect_review_id:
+        raise SystemExit("fix attempt can have only one source review")
     source_review_id = args.source_review_id or "none"
+    source_architect_review_id = args.source_architect_review_id or "none"
     if args.source_review_id:
         source_review = resolve_state_file(root, "reviews", args.source_review_id)
         source_text = source_review.read_text(encoding="utf-8")
         if header_value(source_text, "Linked Task") != task.stem:
             raise SystemExit(f"source review {args.source_review_id} is not linked to task {task.stem}")
+        if header_value(source_text, "Recommendation") == "ready":
+            raise SystemExit(f"source review {args.source_review_id} is already ready")
+        if header_value(source_text, "Status") in {"addressed", "accepted", "superseded"}:
+            raise SystemExit(f"source review {args.source_review_id} is already {header_value(source_text, 'Status')}")
+    if args.source_architect_review_id:
+        source_review = resolve_state_file(root, "architect-reviews", args.source_architect_review_id)
+        source_text = source_review.read_text(encoding="utf-8")
+        if header_value(source_text, "Linked Task") != task.stem:
+            raise SystemExit(f"source architect review {args.source_architect_review_id} is not linked to task {task.stem}")
+        if header_value(source_text, "Recommendation") == "merge-ok":
+            raise SystemExit(f"source architect review {args.source_architect_review_id} is already merge-ok")
+        if header_value(source_text, "Status") in {"addressed", "accepted", "superseded"}:
+            raise SystemExit(f"source architect review {args.source_architect_review_id} is already {header_value(source_text, 'Status')}")
     run = resolve_run(root, run_id)
-    iteration_number = len(files_for_task(root, "iterations", task.stem)) + 1
-    iteration_id = args.iteration_id or f"{task.stem}-i{iteration_number}"
-    iteration_path = unique_path(state_dirs(root)["iterations"], iteration_id)
-    content = read_template(ITERATION_TEMPLATE).format(
-        iteration_id=iteration_path.stem,
+    require_materialized_run(run, "attempt-start")
+    require_architect_gate_passed(root, run)
+    lane = active_lane_for_task(root, run_id, task.stem, args.lane_id)
+    attempt_number = len(files_for_task(root, "attempts", task.stem)) + 1
+    attempt_id = args.attempt_id or f"{task.stem}-a{attempt_number}"
+    attempt_path = unique_path(state_dirs(root)["attempts"], attempt_id)
+    started_at = now()
+    content = read_template(ATTEMPT_TEMPLATE).format(
+        attempt_id=attempt_path.stem,
         status="active",
         kind=args.kind,
-        agent_policy=args.agent_policy,
+        started_at=started_at,
         date=dt.date.today().isoformat(),
         run_id=run_id,
         task_id=task.stem,
+        lane_id=lane_display_id(lane),
         source_review_id=source_review_id,
+        source_architect_review_id=source_architect_review_id,
         title=args.title,
         goal=args.goal or section_content(task_text, "Goal"),
     )
-    write(iteration_path, content, args.dry_run)
-    task_text = append_bullet(task_text, "Iterations", f"{iteration_path.stem}: {args.kind} ({args.agent_policy})")
+    write(attempt_path, content, args.dry_run)
+    task_text = append_bullet(task_text, "Attempts", f"{attempt_path.stem}: {args.kind}")
     save(task, task_text, args.dry_run)
     phase = "Fix Loop" if args.kind == "fix" else "Engineering"
+    default_next = f"Generate engineer package for {attempt_path.stem}, then hand it to engineer."
     run_text = update_header(run, phase=phase, needs_user=args.needs_user)
-    run_text = replace_section(run_text, "Active Iteration", iteration_path.stem)
+    run_text = replace_section(run_text, "Active Attempt", attempt_path.stem)
     if args.kind == "fix":
-        run_text = append_bullet(run_text, "Fix Loop", f"{iteration_path.stem}: fix for {source_review_id} ({args.agent_policy} engineer)")
-    run_text = replace_section(run_text, "Next Action", args.next_action or f"Generate engineer package for {iteration_path.stem}, then spawn engineer.")
-    run_text = append_event_text(run_text, f"Iteration started: {iteration_path.stem}")
+        source = source_review_id if source_review_id != "none" else source_architect_review_id
+        run_text = append_bullet(run_text, "Fix Loop", f"{attempt_path.stem}: fix for {source}")
+    run_text = replace_section(run_text, "Next Action", args.next_action or default_next)
+    run_text = append_event_text(run_text, f"Attempt started: {attempt_path.stem}")
     save(run, run_text, args.dry_run)
+    mark_lane_attempt_started(lane, attempt_path.stem, args.dry_run)
 
 
-def update_source_review_addressed(root: Path, iteration_text: str, dry_run: bool) -> None:
-    source_review_id = header_value(iteration_text, "Source Review")
+def update_source_review_addressed(root: Path, attempt_text: str, dry_run: bool) -> None:
+    source_review_id = header_value(attempt_text, "Source Review")
     if not source_review_id or source_review_id == "none":
         return
     source_review = resolve_state_file(root, "reviews", source_review_id)
@@ -291,9 +468,9 @@ def update_source_review_addressed(root: Path, iteration_text: str, dry_run: boo
     save(source_review, source_text, dry_run)
 
 
-def record_iteration_result(
+def record_attempt_result(
     root: Path,
-    iteration: Path,
+    attempt: Path,
     *,
     status: str,
     changed_files: str,
@@ -305,21 +482,27 @@ def record_iteration_result(
     next_action: str | None,
     dry_run: bool,
 ) -> None:
-    iteration_text = iteration.read_text(encoding="utf-8")
-    task_id = header_value(iteration_text, "Linked Task")
-    run_id = header_value(iteration_text, "Linked Run")
+    attempt_text = attempt.read_text(encoding="utf-8")
+    task_id = header_value(attempt_text, "Linked Task")
+    run_id = header_value(attempt_text, "Linked Run")
     if not task_id or not run_id:
-        raise SystemExit(f"iteration missing Linked Task or Linked Run: {iteration.stem}")
+        raise SystemExit(f"attempt missing Linked Task or Linked Run: {attempt.stem}")
     task = resolve_state_file(root, "tasks", task_id)
+    lane = lane_for_attempt(root, attempt)
+    if lane is not None and header_value(lane.read_text(encoding="utf-8"), "Last Attempt") != attempt.stem:
+        raise SystemExit(f"attempt-result must target latest lane attempt: {header_value(lane.read_text(encoding='utf-8'), 'Last Attempt')}")
     run = resolve_run(root, run_id)
-    iteration_text = replace_line(iteration_text, "Status: ", status)
-    iteration_text = replace_section(iteration_text, "Changed Files", changed_files)
-    iteration_text = replace_section(iteration_text, "Implementation Summary", summary)
-    iteration_text = replace_section(iteration_text, "Verification", verification)
-    iteration_text = replace_section(iteration_text, "Blockers", blockers or "None.")
-    iteration_text = replace_section(iteration_text, "Residual Risk", residual_risk)
-    iteration_text = replace_section(
-        iteration_text,
+    require_materialized_run(run, "attempt-result")
+    attempt_text = replace_line(attempt_text, "Status: ", status)
+    attempt_text = replace_line(attempt_text, "Completed At: ", now())
+    attempt_text = replace_line(attempt_text, "Output Evidence: ", f"{attempt.stem} result")
+    attempt_text = replace_section(attempt_text, "Changed Files", changed_files)
+    attempt_text = replace_section(attempt_text, "Implementation Summary", summary)
+    attempt_text = replace_section(attempt_text, "Verification", verification)
+    attempt_text = replace_section(attempt_text, "Blockers", blockers or "None.")
+    attempt_text = replace_section(attempt_text, "Residual Risk", residual_risk)
+    attempt_text = replace_section(
+        attempt_text,
         "Result",
         "\n".join(
             [
@@ -333,28 +516,29 @@ def record_iteration_result(
             ]
         ),
     )
-    save(iteration, iteration_text, dry_run)
+    save(attempt, attempt_text, dry_run)
     task_text = task.read_text(encoding="utf-8")
-    task_text = replace_section(task_text, "Result", f"Latest iteration result: {iteration.stem} ({status})")
+    task_text = replace_section(task_text, "Result", f"Latest attempt result: {attempt.stem} ({status})")
     save(task, task_text, dry_run)
     phase = "Fix Loop" if status == "blocked" or blocking_present(blockers) else "Review"
-    default_next = "Address iteration blockers before review." if phase == "Fix Loop" else f"Generate reviewer package for {iteration.stem}, then spawn reviewer."
+    default_next = "Address attempt blockers before review." if phase == "Fix Loop" else f"Generate reviewer package for {attempt.stem}, then hand it to reviewer."
     run_text = update_header(run, phase=phase, needs_user=needs_user)
-    run_text = append_bullet(run_text, "Task Results", f"{iteration.stem}: {status} - {summary}")
+    run_text = append_bullet(run_text, "Task Results", f"{attempt.stem}: {status} - {summary}")
     run_text = replace_section(run_text, "Validation and Acceptance", verification)
     if phase == "Fix Loop":
-        run_text = append_bullet(run_text, "Fix Loop", f"{iteration.stem}: {blockers or 'blocked'}")
+        run_text = append_bullet(run_text, "Fix Loop", f"{attempt.stem}: {blockers or 'blocked'}")
     run_text = replace_section(run_text, "Next Action", next_action or default_next)
-    run_text = append_event_text(run_text, f"Iteration result recorded: {iteration.stem}")
+    run_text = append_event_text(run_text, f"Attempt result recorded: {attempt.stem}")
     save(run, run_text, dry_run)
+    mark_lane_attempt_result(root, attempt, dry_run)
 
 
-def command_iteration_result(args: argparse.Namespace) -> None:
+def command_attempt_result(args: argparse.Namespace) -> None:
     root = repo_root(Path.cwd())
-    iteration = resolve_state_file(root, "iterations", args.iteration_id)
-    record_iteration_result(
+    attempt = resolve_state_file(root, "attempts", args.attempt_id)
+    record_attempt_result(
         root,
-        iteration,
+        attempt,
         status=args.status,
         changed_files=args.changed_files,
         summary=args.summary,
@@ -365,158 +549,18 @@ def command_iteration_result(args: argparse.Namespace) -> None:
         next_action=args.next_action,
         dry_run=args.dry_run,
     )
-
-
-def command_task_result(args: argparse.Namespace) -> None:
-    root = repo_root(Path.cwd())
-    task = resolve_state_file(root, "tasks", args.task_id)
-    task_text = task.read_text(encoding="utf-8")
-    run_id = header_value(task_text, "Linked Run")
-    if not run_id:
-        raise SystemExit(f"task missing Linked Run: {task.stem}")
-    if args.iteration_id:
-        iteration = iteration_for_task(root, task.stem, args.iteration_id)
-    else:
-        iteration = latest_for_task(root, "iterations", task.stem)
-        if iteration is None:
-            shim = argparse.Namespace(
-                task_id=task.stem,
-                kind="implementation",
-                source_review_id=None,
-                iteration_id=None,
-                title="legacy task-result implementation",
-                goal=None,
-                agent_policy="fresh",
-                needs_user=None,
-                next_action=None,
-                dry_run=args.dry_run,
-            )
-            command_iteration_start(shim)
-            iteration = latest_for_task(root, "iterations", task.stem)
-            if iteration is None:
-                raise SystemExit("failed to create compatibility iteration")
-    record_iteration_result(
-        root,
-        iteration,
-        status=args.status,
-        changed_files=args.changed_files,
-        summary=args.summary,
-        verification=args.verification,
-        blockers=args.blockers,
-        residual_risk=args.residual_risk,
-        needs_user=args.needs_user,
-        next_action=args.next_action,
-        dry_run=args.dry_run,
-    )
-    run = resolve_run(root, run_id)
-    result = "\n".join(
-        [
-            f"Status: {args.status}",
-            "",
-            "Changed Files:",
-            args.changed_files.strip(),
-            "",
-            "Implementation Summary:",
-            args.summary.strip(),
-            "",
-            "Verification:",
-            args.verification.strip(),
-            "",
-            "Blockers:",
-            (args.blockers or "None.").strip(),
-            "",
-            "Residual Risk:",
-            args.residual_risk.strip(),
-        ]
-    )
-    task_text = replace_line(task_text, "Status: ", args.status)
-    task_text = replace_section(task_text, "Result", result)
-    save(task, task_text, args.dry_run)
-
-
-def command_review(args: argparse.Namespace) -> None:
-    if args.recommendation == "ready" and blocking_present(args.blocking_findings):
-        raise SystemExit("ready review cannot include blocking findings")
-    root = repo_root(Path.cwd())
-    run = resolve_run(root, args.run_id)
-    run_id = run_id_from_path(run)
-    task = task_for_run(root, run_id, args.task_id)
-    task_text = task.read_text(encoding="utf-8")
-    iteration: Path | None = None
-    if args.iteration_id:
-        iteration = iteration_for_task(root, task.stem, args.iteration_id)
-    elif task_has_iterations(root, task.stem):
-        iteration = iteration_for_task(root, task.stem)
-    elif not task_has_result(task_text):
-        raise SystemExit(f"task has no Task Result / patch evidence: {task.stem}")
-    if iteration is not None and not iteration_has_result(iteration.read_text(encoding="utf-8")):
-        raise SystemExit(f"iteration has no result evidence: {iteration.stem}")
-    review_id = args.review_id or f"{today()}-{slug(args.title, 'review')}"
-    review_path = unique_path(state_dirs(root)["reviews"], review_id)
-    source_review_id = header_value(iteration.read_text(encoding="utf-8"), "Source Review") if iteration else "none"
-    if args.loopback_target:
-        loopback_target = args.loopback_target
-    elif args.recommendation == "changes-requested":
-        loopback_target = "engineer"
-    elif args.recommendation == "blocked":
-        loopback_target = "cto"
-    else:
-        loopback_target = "none"
-    content = read_template(REVIEW_TEMPLATE).format(
-        review_id=review_path.stem,
-        status=args.status,
-        recommendation=args.recommendation,
-        date=dt.date.today().isoformat(),
-        run_id=run_id,
-        task_id=task.stem,
-        iteration_id=iteration.stem if iteration else "legacy-task-result",
-        source_review_id=source_review_id,
-        loopback_target=loopback_target,
-        summary=args.summary,
-        blocking_findings=args.blocking_findings or "- None.",
-        non_blocking_findings=args.non_blocking_findings or "- None.",
-        reviewed_diff=args.reviewed_diff,
-        verification=args.verification,
-        residual_risk=args.residual_risk or "Not specified.",
-    )
-    write(review_path, content, args.dry_run)
-    if args.recommendation == "ready":
-        next_action = "Run merge-ready gate."
-        if iteration is not None:
-            iteration_text = replace_line(iteration.read_text(encoding="utf-8"), "Status: ", "reviewed")
-            save(iteration, iteration_text, args.dry_run)
-            task_text = replace_section(task.read_text(encoding="utf-8"), "Latest Ready Iteration", iteration.stem)
-            task_text = replace_line(task_text, "Status: ", "done")
-            save(task, task_text, args.dry_run)
-            update_source_review_addressed(root, iteration_text, args.dry_run)
-    elif loopback_target == "engineer":
-        next_action = f"Start fresh fix iteration for {review_path.stem}."
-    elif loopback_target == "cto":
-        next_action = f"Loop back to CTO before more engineering; review {review_path.stem} is blocked."
-    else:
-        next_action = f"Escalate review {review_path.stem} to root."
-    non_ready_count = non_ready_review_count(root, task.stem)
-    needs_user = args.needs_user
-    if args.recommendation != "ready" and (non_ready_count >= MAX_NON_READY_REVIEWS or loopback_target == "root"):
-        needs_user = "yes"
-        next_action = f"Escalate {task.stem}: {non_ready_count} non-ready reviews or root loopback."
-    run_text = update_header(run, phase="Review", needs_user=needs_user)
-    run_text = append_bullet(run_text, "Review Findings", f"{review_path.stem}: {args.recommendation} - {args.summary}")
-    if args.recommendation == "ready" and source_review_id != "none":
-        run_text = remove_bullet_containing(run_text, "Unresolved Reviews", source_review_id)
-    if args.recommendation != "ready":
-        run_text = append_bullet(run_text, "Fix Loop", f"{review_path.stem}: {args.recommendation}")
-        run_text = append_bullet(run_text, "Unresolved Reviews", f"{review_path.stem}: {args.recommendation} -> {loopback_target}")
-    run_text = replace_section(run_text, "Next Action", args.next_action or next_action)
-    run_text = append_event_text(run_text, f"Review recorded: {review_path.stem}")
-    save(run, run_text, args.dry_run)
 
 
 def merge_ready_failures(root: Path, run: Path) -> list[str]:
     run_id = run_id_from_path(run)
     failures: list[str] = []
+    try:
+        require_materialized_run(run, "merge-ready gate")
+    except SystemExit as error:
+        failures.append(str(error))
     if latest_accepted_brief_for_run(root, run_id) is None:
-        failures.append("missing accepted CTO Intake Brief")
+        failures.append("missing accepted Architecture Brief")
+    failures.extend(execution_plan_merge_ready_failures(root, run))
     contract = latest_for_run(root, "contracts", run_id)
     if contract is None:
         failures.append("missing Technical Contract")
@@ -538,23 +582,20 @@ def merge_ready_failures(root: Path, run: Path) -> list[str]:
         task_id = task.stem
         if not has_content(section_content(task_text, "Required Verification")):
             failures.append(f"{task_id}: missing required verification in Engineer Task")
-        iterations = files_for_task(root, "iterations", task_id)
-        if not iterations:
-            if task_has_result(task_text):
-                failures.append(f"{task_id}: legacy Task Result exists but no iteration evidence")
-            else:
-                failures.append(f"{task_id}: missing iteration evidence")
+        attempts = files_for_task(root, "attempts", task_id)
+        if not attempts:
+            failures.append(f"{task_id}: missing attempt evidence")
             continue
-        latest_iteration = iterations[-1]
-        iteration_text = latest_iteration.read_text(encoding="utf-8")
-        if not packages_for_iteration(root, latest_iteration.stem, "engineer"):
-            failures.append(f"{task_id}: missing engineer package for latest iteration")
-        if not packages_for_iteration(root, latest_iteration.stem, "reviewer"):
-            failures.append(f"{task_id}: missing reviewer package for latest iteration")
-        if not iteration_has_result(iteration_text):
-            failures.append(f"{task_id}: latest iteration missing result evidence")
-        if iteration_has_blockers(iteration_text):
-            failures.append(f"{task_id}: latest iteration still has blockers")
+        latest_attempt = attempts[-1]
+        attempt_text = latest_attempt.read_text(encoding="utf-8")
+        if not packages_for_attempt(root, latest_attempt.stem, "engineer"):
+            failures.append(f"{task_id}: missing engineer package for latest attempt")
+        if not packages_for_attempt(root, latest_attempt.stem, "reviewer"):
+            failures.append(f"{task_id}: missing reviewer package for latest attempt")
+        if not attempt_has_result(attempt_text):
+            failures.append(f"{task_id}: latest attempt missing result evidence")
+        if attempt_has_blockers(attempt_text):
+            failures.append(f"{task_id}: latest attempt still has blockers")
         unresolved = unresolved_reviews_for_task(root, task_id)
         for review in unresolved:
             failures.append(f"{task_id}: unresolved review {review.stem}")
@@ -566,9 +607,9 @@ def merge_ready_failures(root: Path, run: Path) -> list[str]:
         review_text = review.read_text(encoding="utf-8")
         if header_value(review_text, "Recommendation") != "ready":
             failures.append(f"{task_id}: latest review is not ready")
-        linked_iteration = header_value(review_text, "Linked Iteration")
-        if linked_iteration != latest_iteration.stem:
-            failures.append(f"{task_id}: latest review does not cover latest iteration")
+        linked_attempt = header_value(review_text, "Linked Attempt")
+        if linked_attempt != latest_attempt.stem:
+            failures.append(f"{task_id}: latest review does not cover latest attempt")
         if blocking_present(section_content(review_text, "Blocking Findings")):
             failures.append(f"{task_id}: review has blocking findings")
         if not has_content(section_content(review_text, "Reviewed Verification")):
@@ -601,6 +642,7 @@ def command_gate(args: argparse.Namespace) -> None:
         raise SystemExit(f"unsupported gate mode: {args.mode}")
     root = repo_root(Path.cwd())
     run = resolve_run(root, args.run_id)
+    require_materialized_run(run, "gate")
     run_merge_ready_gate(root, run, args.dry_run)
 
 
@@ -666,6 +708,12 @@ def command_risk(args: argparse.Namespace) -> None:
 
 def command_decision(args: argparse.Namespace) -> None:
     root = repo_root(Path.cwd())
+    discussion = None
+    if args.discussion_id:
+        discussion = resolve_state_file(root, "discussions", args.discussion_id)
+        require_interaction_writable(discussion, "record root decisions")
+    if args.architect_intake_id:
+        resolve_state_file(root, "architect-intakes", args.architect_intake_id)
     decision_id = args.decision_id or f"{today()}-{slug(args.title, 'decision')}"
     decision_path = unique_path(state_dirs(root)["decisions"], decision_id)
     content = read_template(DECISION_TEMPLATE).format(
@@ -673,6 +721,8 @@ def command_decision(args: argparse.Namespace) -> None:
         status=args.status,
         date=dt.date.today().isoformat(),
         run_id=args.run_id or "none",
+        discussion_id=args.discussion_id or "none",
+        architect_intake_id=args.architect_intake_id or "none",
         context=args.context or "Not specified.",
         decision=args.decision,
         rationale=args.rationale or "Not specified.",
@@ -684,16 +734,23 @@ def command_decision(args: argparse.Namespace) -> None:
     ledger_text = replace_line(ledger_text, "Updated At: ", now())
     ledger_text = append_bullet(ledger_text, "Root Decisions", f"{decision_path.stem}: {args.decision}")
     save(ledger, ledger_text, args.dry_run)
+    if discussion is not None:
+        discussion_text = replace_line(discussion.read_text(encoding="utf-8"), "Updated At: ", now())
+        discussion_text = append_bullet(discussion_text, "Root Decisions", f"{decision_path.stem}: {args.decision}")
+        discussion_text = append_event_text(discussion_text, f"root decision recorded: {decision_path.stem}")
+        save(discussion, discussion_text, args.dry_run)
     if args.run_id:
         run = resolve_run(root, args.run_id)
         run_text = append_bullet(run.read_text(encoding="utf-8"), "Root Decisions", f"{decision_path.stem}: {args.decision}")
         save(run, run_text, args.dry_run)
+        mark_root_decision_directives_addressed(root, run.stem, decision_path.stem, args.dry_run)
 
 
 def command_close(args: argparse.Namespace) -> None:
     root = repo_root(Path.cwd())
     run = resolve_run(root, args.run_id)
     if args.status == "accepted":
+        require_materialized_run(run, "close --status accepted")
         run_merge_ready_gate(root, run, args.dry_run)
     run_text = update_header(run, status=args.status, phase="Closed", needs_user="no")
     recommendation = f"{args.status}: {args.summary}"

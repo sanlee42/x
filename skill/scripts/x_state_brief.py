@@ -18,14 +18,14 @@ def command_brief(args: argparse.Namespace) -> None:
         package_text = package.read_text(encoding="utf-8")
         if header_value(package_text, "Linked Run") != run_id:
             raise SystemExit(f"package {args.package_id} is not linked to run {run_id}")
-        if header_value(package_text, "Role") != "cto":
-            raise SystemExit(f"package {args.package_id} is not a cto package")
+        if header_value(package_text, "Role") != "architect":
+            raise SystemExit(f"package {args.package_id} is not an architect package")
 
-    brief_id = args.brief_id or f"{today()}-{slug(args.title, 'cto-brief')}"
+    brief_id = args.brief_id or f"{today()}-{slug(args.title, 'architecture-brief')}"
     brief_path = unique_path(state_dirs(root)["briefs"], brief_id)
-    accepted_direction = args.accepted_direction or (
-        args.recommendation if args.status == "accepted" else "Pending."
-    )
+    if args.status == "accepted" and not has_content(args.accepted_direction or ""):
+        raise SystemExit("--accepted-direction is required for accepted Architecture Brief")
+    accepted_direction = args.accepted_direction or "Pending."
     next_action = args.next_action or default_next_action(args.status, brief_path.stem)
     content = read_template(BRIEF_TEMPLATE).format(
         brief_id=brief_path.stem,
@@ -34,7 +34,7 @@ def command_brief(args: argparse.Namespace) -> None:
         run_id=run_id,
         package_id=package_id,
         directive=section_content(run_text, "Root Directive"),
-        cto_questions=args.cto_questions,
+        architect_questions=args.architect_questions,
         options=args.options,
         recommendation=args.recommendation,
         risks=args.risks,
@@ -61,9 +61,9 @@ def command_brief(args: argparse.Namespace) -> None:
         ]
     )
     run_text = update_header(run, phase=phase, needs_user=needs_user)
-    run_text = replace_section(run_text, "CTO Intake Brief", brief_summary)
+    run_text = replace_section(run_text, "Architecture Brief", brief_summary)
     run_text = replace_section(run_text, "Next Action", next_action)
-    run_text = append_event_text(run_text, f"CTO Intake Brief recorded: {brief_path.stem} ({args.status})")
+    run_text = append_event_text(run_text, f"Architecture Brief recorded: {brief_path.stem} ({args.status})")
     save(run, run_text, args.dry_run)
 
     ledger = ensure_ledger(root, dry_run=args.dry_run)
@@ -80,17 +80,17 @@ def command_brief(args: argparse.Namespace) -> None:
 
 def phase_for_status(status: str) -> str:
     if status == "accepted":
-        return "CTO Accepted"
+        return "Architect Accepted"
     if status == "blocked":
-        return "CTO Blocked"
-    return "CTO Co-Creation"
+        return "Architect Blocked"
+    return "Architect Co-Creation"
 
 
 def default_next_action(status: str, brief_id: str) -> str:
     if status == "accepted":
-        return f"Create Technical Contract from accepted CTO Intake Brief {brief_id}."
+        return f"Materialize execution worktree from accepted Architecture Brief {brief_id}."
     if status == "blocked":
-        return f"Resolve root/CTO blocker before creating Technical Contract from {brief_id}."
+        return f"Resolve root/architect blocker before creating Technical Contract from {brief_id}."
     if status == "superseded":
-        return "Create or select the active CTO Intake Brief."
-    return f"Continue root/CTO co-creation for {brief_id}."
+        return "Create or select the active Architecture Brief."
+    return f"Continue root/architect co-creation for {brief_id}."

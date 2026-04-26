@@ -5,7 +5,7 @@ Recommendation: {recommendation}
 Date: {date}
 Linked Run: {run_id}
 Linked Task: {task_id}
-Linked Iteration: {iteration_id}
+Linked Attempt: {attempt_id}
 Source Review: {source_review_id}
 Loopback Target: {loopback_target}
 

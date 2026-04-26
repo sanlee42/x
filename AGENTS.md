@@ -21,5 +21,5 @@ Rules for working on `x` itself.
 
 - Run `python -m py_compile skill/scripts/*.py` after script changes.
 - Parse `agents/*.toml` after prompt changes.
-- Smoke package generation for `cto`, `engineer`, and `reviewer` when package behavior changes.
+- Smoke package generation for `architect`, `engineer`, and `reviewer` when package behavior changes.
 - Keep hand-written Python files below 800 lines.

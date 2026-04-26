@@ -1,24 +1,37 @@
 ---
 name: x
-description: Use for the repository CTO-to-code loop when the user says "$x cto", "$x status", "$x resume", "$x checkpoint", or "$x close" and wants Codex to replace manual CTO discussion, codebase investigation, technical design, implementation, review, fix loop, and merge-back recommendation.
+description: Use for the repository architect-to-code loop when the user says "$x architect", "$x status", "$x resume", "$x checkpoint", or "$x close" and wants Codex to replace manual architecture discussion, codebase investigation, technical design, implementation, review, fix loop, and merge-back recommendation.
 ---
 
 # x
 
-`x` is the repository CTO-to-code loop. It turns a root directive into CTO co-creation, an accepted CTO Intake Brief, a Technical Contract, Engineer Tasks, implementation/fix iterations, subagent input packages, review findings, decisions, risks, and a merge-back recommendation.
+`x` is the repository architect-to-code loop. It turns optional root-facing interactions into durable role briefs, proposals, root decisions, and architect intakes, then turns a root/architect room into an accepted Architecture Brief, materialized integration worktree, Technical Contract, Architect Execution Plan, gated lane worktrees, advisory lane heartbeats, implementation/fix attempts, role input packages, code reviews, architect directives and integration reviews, lane integrations, decisions, risks, and a merge-back recommendation.
 
-This is a prompt protocol, not a shell command or slash command. The bundled script is only the state machine.
+This is a prompt protocol, not a shell command or slash command. The bundled script is the internal state helper; users should not need to memorize its lower-level commands.
+
+The execution model is:
+
+```text
+interaction/discussion -> root decision -> architect intake -> run -> Architect Execution Plan -> readiness gate -> lanes -> lane heartbeats -> attempt -> code review -> architect directives/review -> integrate -> merge-ready gate
+```
 
 ## Trigger
 
 Use this skill when the user says:
 
-- `$x cto: <goal>` or `x cto`
+- `$x architect`, `$x architect: <goal>`, or `x architect`
 - `$x status`, `$x resume`, `$x checkpoint`, `$x close`
+- `$x discussion`, `$x with <role>`, `$x council`, `$x product`, `$x technical`, `$x strategy`, or another configured interaction role for root-facing direction interaction before architecture
 
-Do not use `$x start engineering` as the user-facing entry. `Engineering Loop` is the lower execution layer behind the CTO entry.
+Do not use `$x start engineering` as the user-facing entry. `Engineering Loop` is the lower execution layer behind the architect room.
 
-## Required context
+## Fresh Instruction Reload
+
+At the start of every `$x architect`, `$x discussion`, `$x with <role>`, `$x council`, `$x product`, `$x technical`, `$x strategy`, `$x status`, `$x resume`, `$x checkpoint`, or `$x close` turn, main agent must reread the currently installed `~/.codex/skills/x/SKILL.md`, relevant role prompts from `~/.codex/agents/`, and configured interaction role cards before deciding what to do. Do not rely on stale remembered x workflow rules.
+
+Newly spawned architect, engineer, and reviewer agents must use the latest installed prompts. If a role agent was spawned before the latest x instruction change, treat its output as potentially stale for changed workflow behavior and use a fresh role package/subagent for decisions affected by the change.
+
+## Required Context
 
 Read these first:
 
@@ -29,7 +42,18 @@ Read these first:
 5. `~/.x/projects/<project-key>/ledger/current.md` if it exists
 6. The current run file under `~/.x/projects/<project-key>/runs/` when resuming, checking status, checkpointing, or closing
 
-## State tool
+## Reference Loading
+
+Load only the references needed for the current action:
+
+- `$x architect` or execution-oriented `$x resume`: read [`references/architect-room-workflow.md`](references/architect-room-workflow.md) and [`references/gates-and-close-policy.md`](references/gates-and-close-policy.md).
+- After `architect-gate` passes or when scheduling lanes/reviewers: read [`references/parallel-execution-policy.md`](references/parallel-execution-policy.md). This preserves aggressive safe parallelism with no fixed default engineer/reviewer cap.
+- Before architect integration review or merge-ok decisions: read [`references/architect-review-policy.md`](references/architect-review-policy.md).
+- When lane heartbeat, underused parallelism, scope drift, weak verification, repeated fix loops, quota/context risk, or integration-batch signals appear: read [`references/active-architect-observation.md`](references/active-architect-observation.md).
+- `$x status`, `$x checkpoint`, `$x close`, and pre-close checks: read [`references/gates-and-close-policy.md`](references/gates-and-close-policy.md).
+- Root discussion/interaction, council/合议, strategy, technical, product, challenger, or Acceptance/QA discussion: read [`references/root-interaction-design.md`](references/root-interaction-design.md). Acceptance/QA gate behavior is still future-layer design.
+
+## State Tool
 
 Use the bundled script instead of hand-writing run files:
 
@@ -37,147 +61,29 @@ Use the bundled script instead of hand-writing run files:
 python ~/.codex/skills/x/scripts/x_state.py --help
 ```
 
-The script owns:
-
-- `.x/project/profile.md`
-- `~/.x/projects/<project-key>/runs/<run-id>.md`
-- `~/.x/projects/<project-key>/briefs/<brief-id>.md`
-- `~/.x/projects/<project-key>/contracts/<contract-id>.md`
-- `~/.x/projects/<project-key>/tasks/<task-id>.md`
-- `~/.x/projects/<project-key>/iterations/<iteration-id>.md`
-- `~/.x/projects/<project-key>/reviews/<review-id>.md`
-- `~/.x/projects/<project-key>/packages/<package-id>.md`
-- `~/.x/projects/<project-key>/decisions/<decision-id>.md`
-- `~/.x/projects/<project-key>/ledger/current.md`
-- `~/.x/projects/<project-key>/risks/<risk-id>.md`
+The script owns `.x/project/profile.md` in the product repo and runtime markdown state under `~/.x/projects/<project-key>/`, including interactions/discussions, configurable role cards, role briefs, architect intakes, boards, runs, briefs, contracts, execution plans, lanes with heartbeat fields, tasks, attempts, reviews, architect reviews, directives, packages, messages, decisions, ledger, and risks.
 
 ## Roles
 
-- `root`: the user; owns direction, final merge authority, and irreversible decisions.
-- `main agent`: orchestrates, does repo/context intake, spawns subagents, writes `.x` state, runs gates, and reports to root.
-- `cto`: co-creates the CTO Intake Brief with root, then converts an accepted direction into technical boundaries.
-- `engineer`: implements only a bounded Engineer Task and returns patch evidence.
-- `reviewer`: independently reviews patch evidence against the contract, task, diff, tests, and repo constraints.
+- `root`: the user; owns direction, final merge authority, irreversible decisions, and explicit merge/push/PR authorization.
+- `main agent`: orchestrates, does repo/context intake, writes `.x` state, materializes the integration worktree, starts gated lane worktrees, runs gates, and reports to root.
+- `interaction role views`: configurable upper-layer role cards, with default templates for `strategy`, `technical`, `product`, `architect`, and `challenger`; they produce turns and optional formal role briefs for root decision-making and must not manage execution. `product` owns product shape and user path, not Acceptance/QA.
+- `architect`: co-creates the Architecture Brief with root, converts accepted direction into technical boundaries, produces the Architect Execution Plan, observes execution, issues architect directives, and performs architect integration review.
+- `engineer`: implements only one bounded lane attempt or fix attempt and returns patch evidence.
+- `reviewer`: independently reviews patch evidence against the contract, execution plan, lane, task, diff, tests, and repo constraints.
 
-Subagents must not spawn child agents or write final ledger state.
+Role package receivers must not spawn child agents or write final ledger state.
 
 All roles load project context before answering: `PROJECT_CONSTRAINTS.md`, `AGENTS.md`, optional `.x/project/profile.md`, then their x package. If they conflict, earlier files win; if the package conflicts with project context, the role reports the conflict instead of guessing.
 
-## CTO Start
+The root control root normally starts on `master/main`. The run's materialized worktree under `.dev/<scope>` is the integration worktree. Engineer and reviewer role work happens only in lane worktrees under `.dev/<scope>-<lane-id>`.
 
-For `$x cto: <goal>`:
+## Core Boundaries
 
-1. Create a run:
-   ```bash
-   python ~/.codex/skills/x/scripts/x_state.py start --goal "<goal>" --directive "<root directive>" --success "<success criteria>" --constraints "<constraints>"
-   ```
-2. Do minimal repo/context intake and write `Repo Intake` plus `Codebase Findings`:
-   ```bash
-   python ~/.codex/skills/x/scripts/x_state.py section --name "Repo Intake" --content "<repo intake>"
-   python ~/.codex/skills/x/scripts/x_state.py section --name "Codebase Findings" --content "<findings>"
-   ```
-3. Generate a CTO package, then spawn `cto` for root/CTO co-creation:
-   ```bash
-   python ~/.codex/skills/x/scripts/x_state.py package --role cto --title "<cto package>" --notes "<known context>"
-   ```
-4. Discuss with root if the CTO response has open questions, options, or root decisions. Record the result as a CTO Intake Brief:
-   ```bash
-   python ~/.codex/skills/x/scripts/x_state.py brief --title "<brief>" --package-id "<package-id>" --status accepted --cto-questions "<questions>" --options "<options>" --recommendation "<recommendation>" --risks "<risks>" --root-decisions-needed "<root decisions>" --accepted-direction "<accepted direction>"
-   ```
-5. If the brief is `draft` or `blocked`, continue root/CTO discussion. Do not create a Technical Contract.
-6. From an accepted brief, create the Technical Contract:
-   ```bash
-   python ~/.codex/skills/x/scripts/x_state.py contract --brief-id "<brief-id>" --title "<contract>" --goal "<goal>" --repo-intake "<intake>" --codebase-findings "<findings>" --allowed-boundaries "<scope>" --forbidden-boundaries "<scope>" --reversible-path "<path>" --verification "<tests>" --loopback "<conditions>"
-   ```
-7. Main agent creates one or more Engineer Tasks from the contract:
-   ```bash
-   python ~/.codex/skills/x/scripts/x_state.py task --title "<task>" --goal "<goal>" --allowed-scope "<scope>" --forbidden-scope "<scope>" --requirements "<requirements>" --verification "<tests>" --done-evidence "<evidence>"
-   ```
-8. Start one implementation iteration:
-   ```bash
-   python ~/.codex/skills/x/scripts/x_state.py iteration-start --task-id "<task-id>" --kind implementation --title "<iteration title>"
-   ```
-9. Generate an engineer package, then spawn a fresh `engineer` with that package:
-   ```bash
-   python ~/.codex/skills/x/scripts/x_state.py package --role engineer --task-id "<task-id>" --iteration-id "<iteration-id>"
-   ```
-10. After implementation, record iteration evidence:
-    ```bash
-    python ~/.codex/skills/x/scripts/x_state.py iteration-result --iteration-id "<iteration-id>" --changed-files "<files>" --summary "<summary>" --verification "<observed results>" --residual-risk "<risk>"
-    ```
-11. Generate a reviewer package only after iteration evidence exists, then spawn `reviewer`:
-    ```bash
-    python ~/.codex/skills/x/scripts/x_state.py package --role reviewer --task-id "<task-id>" --iteration-id "<iteration-id>" --diff-stat "<git diff --stat>" --diff "<git diff>"
-    ```
-12. Record review:
-    ```bash
-    python ~/.codex/skills/x/scripts/x_state.py review --title "<review>" --task-id "<task-id>" --iteration-id "<iteration-id>" --summary "<summary>" --recommendation ready --reviewed-diff "<diff evidence>" --verification "<assessment>"
-    ```
-13. If review requests changes, start a fresh fix iteration from that review:
-    ```bash
-    python ~/.codex/skills/x/scripts/x_state.py iteration-start --task-id "<task-id>" --kind fix --source-review-id "<review-id>" --agent-policy fresh --title "<fix title>"
-    ```
-14. Continue engineer package -> fresh engineer -> iteration-result -> reviewer package -> reviewer -> review until the task has a ready review.
-15. Run the merge-ready gate:
-    ```bash
-    python ~/.codex/skills/x/scripts/x_state.py gate --mode merge-ready
-    ```
-16. If the gate passes, create a local commit when the implementation changed code and write a close recommendation. Do not merge to `master/main`, push, open PR, or call GitHub unless root explicitly asks.
-
-## Status and Resume
-
-For `x status`, do not re-plan. Read state only. The output starts with the current repo root, project key, runtime directory, and project profile path:
-
-```bash
-python ~/.codex/skills/x/scripts/x_state.py status
-```
-
-For `x doctor`, check project binding and local install diagnostics before starting work in an unfamiliar repo:
-
-```bash
-python ~/.codex/skills/x/scripts/x_state.py doctor
-```
-
-For `x resume`, continue from `Next Operating Actions` / `Next Action`:
-
-```bash
-python ~/.codex/skills/x/scripts/x_state.py resume
-```
-
-Before resumed work, use the resume output to choose the next phase and checkpoint after finishing that phase.
-
-## Checkpoint and Close
-
-For `x checkpoint`, compress current state:
-
-```bash
-python ~/.codex/skills/x/scripts/x_state.py checkpoint --summary "<summary>" --next-action "<next action>"
-```
-
-For `x close --status accepted`, the merge-ready gate must pass first:
-
-```bash
-python ~/.codex/skills/x/scripts/x_state.py close --status accepted --summary "<merge-back recommendation>"
-```
-
-## Gates
-
-- No accepted CTO Intake Brief, no Technical Contract.
-- No Technical Contract, no Engineer Task.
-- No Engineer Task, no iteration.
-- No iteration, no engineer package.
-- No iteration result / patch evidence, no reviewer package.
-- `review --recommendation ready` cannot include blocking findings.
-- Blocking or unresolved review means no accepted close.
-- Any active task without a latest ready reviewed iteration fails the merge-ready gate.
-- Three non-ready reviews for the same task require CTO/root loopback.
-- Missing required verification means no merge-ready gate.
-- Merge-back recommendation is not a merge. Root must explicitly authorize merge, push, PR, or GitHub integration.
-
-## Future Upper Layer
-
-CEO/Product/Growth may later produce root-ready CTO inputs, but they are not active roles in this MVP. The active boundary is:
-
-```text
-root -> CTO co-creation -> accepted CTO Intake Brief -> Technical Contract -> Engineer Task -> implementation/review/fix loop -> merge-back recommendation
-```
+- No accepted Architecture Brief, no Technical Contract or materialized execution worktree.
+- Interaction outputs are advisory until root records a decision; accepted Architect Intakes require an accepted root decision.
+- Role briefs and interaction synthesis/proposals must include strongest objection, weakest assumption, and evidence that would change the recommendation.
+- No materialized execution worktree and gated Architect Execution Plan, no lane work.
+- Reviewer `ready` is code-review evidence only; architect `merge-ok` is required before integration.
+- Architect directives are the control surface for pause, resume, replan, continue, and root decisions.
+- Merge-back recommendation is not a merge. Do not merge to `master/main`, push, open PR, or call GitHub unless root explicitly asks.

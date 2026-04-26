@@ -1,13 +1,21 @@
-# x Subagent Package: {package_id}
+# x Package: {package_id}
 
 Status: {status}
 Role: {role}
 Date: {date}
 Linked Run: {run_id}
 Linked Contract: {contract_id}
+Linked Plan: {plan_id}
+Linked Lane: {lane_id}
 Linked Task: {task_id}
-Linked Iteration: {iteration_id}
+Linked Attempt: {attempt_id}
 Linked Review: {review_id}
+Control Root: {control_root}
+Execution Status: {execution_status}
+Integration Worktree: {execution_worktree}
+Integration Branch: {execution_branch}
+Lane Worktree: {lane_worktree}
+Lane Branch: {lane_branch}
 
 ## Purpose
 
@@ -17,7 +25,8 @@ Linked Review: {review_id}
 
 - Load Project Context Files before answering; earlier files win on conflict.
 - Stay inside the package role and linked state records.
-- Do not mutate final ledger state from a subagent.
+- Do not mutate final ledger state from a role package.
+- Engineer and reviewer roles must work only in the Lane Worktree. If it is not available or the cwd does not match, stop and report the blocker.
 - Return exactly the evidence requested below.
 
 ## Project Context Files

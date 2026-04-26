@@ -1,4 +1,4 @@
-"""Shared helpers for the x CTO-to-code loop."""
+"""Shared helpers for the x architect-to-code loop."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import argparse
 import datetime as dt
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -17,12 +18,25 @@ RUN_TEMPLATE = ASSETS / "run-template.md"
 CONTRACT_TEMPLATE = ASSETS / "contract-template.md"
 BRIEF_TEMPLATE = ASSETS / "brief-template.md"
 TASK_TEMPLATE = ASSETS / "task-template.md"
-ITERATION_TEMPLATE = ASSETS / "iteration-template.md"
+ATTEMPT_TEMPLATE = ASSETS / "attempt-template.md"
 REVIEW_TEMPLATE = ASSETS / "review-template.md"
 PACKAGE_TEMPLATE = ASSETS / "package-template.md"
+EXECUTION_PLAN_TEMPLATE = ASSETS / "execution-plan-template.md"
+LANE_TEMPLATE = ASSETS / "lane-template.md"
+ARCHITECT_REVIEW_TEMPLATE = ASSETS / "architect-review-template.md"
+DIRECTIVE_TEMPLATE = ASSETS / "directive-template.md"
 DECISION_TEMPLATE = ASSETS / "decision-template.md"
 RISK_TEMPLATE = ASSETS / "risk-template.md"
+MESSAGE_TEMPLATE = ASSETS / "message-template.md"
+DISCUSSION_TEMPLATE = ASSETS / "discussion-template.md"
+ROLE_BRIEF_TEMPLATE = ASSETS / "role-brief-template.md"
+ARCHITECT_INTAKE_TEMPLATE = ASSETS / "architect-intake-template.md"
+ROLE_CARD_TEMPLATE = ASSETS / "role-card-template.md"
+DEFAULT_ROLE_CARDS_DIR = ASSETS / "role-cards"
 MAX_NON_READY_REVIEWS = 3
+CLOSED_RUN_STATUSES = {"accepted", "closed", "superseded"}
+MATERIALIZED = "materialized"
+UNMATERIALIZED = "unmaterialized"
 
 
 def repo_root(start: Path) -> Path:
@@ -45,6 +59,36 @@ def slug(value: str, fallback: str = "item") -> str:
     normalized = re.sub(r"[^A-Za-z0-9]+", "-", value.strip().lower()).strip("-")
     normalized = re.sub(r"-{2,}", "-", normalized)
     return (normalized or fallback)[:56].strip("-") or fallback
+
+
+def git_output(root: Path, *args: str, default: str | None = None) -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "-C", str(root), *args],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        if default is not None:
+            return default
+        raise SystemExit(f"git command failed: git -C {root} {' '.join(args)}")
+
+
+def git_path(root: Path, *args: str) -> Path:
+    value = git_output(root, *args)
+    path = Path(value)
+    if not path.is_absolute():
+        path = root / path
+    return path.resolve()
+
+
+def current_git_context(root: Path) -> dict[str, str]:
+    return {
+        "root": str(root.resolve()),
+        "branch": git_output(root, "rev-parse", "--abbrev-ref", "HEAD", default="unknown"),
+        "base_commit": git_output(root, "rev-parse", "HEAD", default="unknown"),
+        "git_common_dir": str(git_path(root, "rev-parse", "--git-common-dir")),
+    }
 
 
 def x_home() -> Path:
@@ -90,11 +134,21 @@ def state_dirs(root: Path) -> dict[str, Path]:
         "briefs": base / "briefs",
         "contracts": base / "contracts",
         "tasks": base / "tasks",
-        "iterations": base / "iterations",
+        "attempts": base / "attempts",
         "reviews": base / "reviews",
+        "execution-plans": base / "execution-plans",
+        "lanes": base / "lanes",
+        "architect-reviews": base / "architect-reviews",
+        "directives": base / "directives",
         "packages": base / "packages",
         "decisions": base / "decisions",
         "risks": base / "risks",
+        "messages": base / "messages",
+        "discussions": base / "discussions",
+        "role-briefs": base / "role-briefs",
+        "architect-intakes": base / "architect-intakes",
+        "roles": base / "roles",
+        "boards": base / "boards",
     }
 
 
@@ -136,7 +190,72 @@ def resolve_run(root: Path, run_id: str | None) -> Path:
         if not path.exists():
             raise SystemExit(f"run not found: {run_id}")
         return path
-    return latest_run(root)
+    return select_current_run(root)
+
+
+def all_runs(root: Path) -> list[Path]:
+    runs = state_dirs(root)["runs"]
+    if not runs.exists():
+        return []
+    return sorted(runs.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
+
+
+def run_status(path: Path) -> str:
+    return header_value(path.read_text(encoding="utf-8"), "Status") or "active"
+
+
+def run_phase(path: Path) -> str:
+    return header_value(path.read_text(encoding="utf-8"), "Current Phase") or "unknown"
+
+
+def active_runs(root: Path) -> list[Path]:
+    return [run for run in all_runs(root) if run_status(run) not in CLOSED_RUN_STATUSES]
+
+
+def header_path(text: str, name: str) -> Path | None:
+    value = header_value(text, name)
+    if value in {"", "-", "Pending.", UNMATERIALIZED, "none"}:
+        return None
+    return Path(value).expanduser().resolve()
+
+
+def run_control_root(run: Path) -> Path | None:
+    return header_path(run.read_text(encoding="utf-8"), "Control Root")
+
+
+def run_execution_worktree(run: Path) -> Path | None:
+    return header_path(run.read_text(encoding="utf-8"), "Execution Worktree")
+
+
+def run_execution_status(run: Path) -> str:
+    return header_value(run.read_text(encoding="utf-8"), "Execution Status") or UNMATERIALIZED
+
+
+def run_is_materialized(run: Path) -> bool:
+    return run_execution_status(run) == MATERIALIZED and run_execution_worktree(run) is not None
+
+
+def select_current_run(root: Path) -> Path:
+    runs = active_runs(root)
+    if not runs:
+        return latest_run(root)
+    current = root.resolve()
+    execution_matches = [run for run in runs if run_execution_worktree(run) == current]
+    if len(execution_matches) == 1:
+        return execution_matches[0]
+    if len(execution_matches) > 1:
+        ids = ", ".join(run.stem for run in execution_matches)
+        raise SystemExit(f"multiple active x runs are bound to this execution worktree; pass --run-id ({ids})")
+    control_matches = [run for run in runs if run_control_root(run) == current]
+    if len(control_matches) == 1:
+        return control_matches[0]
+    if len(control_matches) > 1:
+        ids = ", ".join(run.stem for run in control_matches)
+        raise SystemExit(f"multiple active x runs in this control root; pass --run-id ({ids})")
+    if len(runs) == 1:
+        return runs[0]
+    ids = ", ".join(run.stem for run in runs)
+    raise SystemExit(f"multiple active x runs; pass --run-id ({ids})")
 
 
 def resolve_state_file(root: Path, kind: str, item_id: str) -> Path:
@@ -188,7 +307,11 @@ def files_for_header(root: Path, kind: str, header: str, value: str) -> list[Pat
         text = path.read_text(encoding="utf-8")
         if header_value(text, header) == value:
             candidates.append(path)
-    return sorted(candidates, key=lambda p: p.name)
+    return sorted(candidates, key=state_file_sort_key)
+
+
+def state_file_sort_key(path: Path) -> tuple:
+    return tuple(int(part) if part.isdigit() else part for part in re.split(r"(\d+)", path.name))
 
 
 def files_for_run(root: Path, kind: str, run_id: str) -> list[Path]:
@@ -204,8 +327,8 @@ def latest_for_task(root: Path, kind: str, task_id: str) -> Path | None:
     return candidates[-1] if candidates else None
 
 
-def packages_for_iteration(root: Path, iteration_id: str, role: str) -> list[Path]:
-    packages = files_for_header(root, "packages", "Linked Iteration", iteration_id)
+def packages_for_attempt(root: Path, attempt_id: str, role: str) -> list[Path]:
+    packages = files_for_header(root, "packages", "Linked Attempt", attempt_id)
     return [package for package in packages if header_value(package.read_text(encoding="utf-8"), "Role") == role]
 
 
@@ -229,6 +352,21 @@ def replace_line(text: str, prefix: str, value: str) -> str:
             lines[index] = f"{prefix}{value}"
             return "\n".join(lines) + "\n"
     return text
+
+
+def upsert_line_after(text: str, prefix: str, value: str, after_prefix: str) -> str:
+    replacement = f"{prefix}{value}"
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        if line.startswith(prefix):
+            lines[index] = replacement
+            return "\n".join(lines) + "\n"
+    for index, line in enumerate(lines):
+        if line.startswith(after_prefix):
+            lines.insert(index + 1, replacement)
+            return "\n".join(lines) + "\n"
+    lines.insert(1, replacement)
+    return "\n".join(lines) + "\n"
 
 
 def section_bounds(text: str, name: str) -> tuple[int, int] | None:
@@ -377,8 +515,27 @@ def accepted_brief_for_run(root: Path, run_id: str, brief_id: str | None = None)
         return path
     path = latest_accepted_brief_for_run(root, run_id)
     if path is None:
-        raise SystemExit("accepted CTO Intake Brief required before Technical Contract")
+        raise SystemExit("accepted Architecture Brief required before Technical Contract")
     return path
+
+
+def accepted_brief_with_direction(root: Path, run_id: str) -> Path:
+    brief = accepted_brief_for_run(root, run_id)
+    direction = section_content(brief.read_text(encoding="utf-8"), "Accepted Direction")
+    if not has_content(direction):
+        raise SystemExit(f"accepted Architecture Brief has no accepted direction: {brief.stem}")
+    return brief
+
+
+def require_materialized_run(run: Path, operation: str) -> Path:
+    if run_execution_status(run) != MATERIALIZED:
+        raise SystemExit(f"{operation} requires a materialized execution worktree for run {run.stem}")
+    worktree = run_execution_worktree(run)
+    if worktree is None:
+        raise SystemExit(f"{operation} requires Execution Worktree for run {run.stem}")
+    if not worktree.exists():
+        raise SystemExit(f"{operation} execution worktree is missing for run {run.stem}: {worktree}")
+    return worktree
 
 
 def task_for_run(root: Path, run_id: str, task_id: str | None = None) -> Path:
@@ -390,20 +547,20 @@ def task_for_run(root: Path, run_id: str, task_id: str | None = None) -> Path:
     return path
 
 
-def iteration_for_task(root: Path, task_id: str, iteration_id: str | None = None) -> Path:
-    if iteration_id:
-        iteration = resolve_state_file(root, "iterations", iteration_id)
-        if header_value(iteration.read_text(encoding="utf-8"), "Linked Task") != task_id:
-            raise SystemExit(f"iteration {iteration_id} is not linked to task {task_id}")
-        return iteration
-    path = latest_for_task(root, "iterations", task_id)
+def attempt_for_task(root: Path, task_id: str, attempt_id: str | None = None) -> Path:
+    if attempt_id:
+        attempt = resolve_state_file(root, "attempts", attempt_id)
+        if header_value(attempt.read_text(encoding="utf-8"), "Linked Task") != task_id:
+            raise SystemExit(f"attempt {attempt_id} is not linked to task {task_id}")
+        return attempt
+    path = latest_for_task(root, "attempts", task_id)
     if path is None:
-        raise SystemExit("no iteration found for task")
+        raise SystemExit("no attempt found for task")
     return path
 
 
-def task_has_iterations(root: Path, task_id: str) -> bool:
-    return bool(files_for_task(root, "iterations", task_id))
+def task_has_attempts(root: Path, task_id: str) -> bool:
+    return bool(files_for_task(root, "attempts", task_id))
 
 
 def task_has_result(task_text: str) -> bool:
@@ -423,15 +580,15 @@ def active_tasks_for_run(root: Path, run_id: str) -> list[Path]:
     return [task for task in tasks if item_status(task) != "superseded"]
 
 
-def iteration_has_result(iteration_text: str) -> bool:
-    status = header_value(iteration_text, "Status")
+def attempt_has_result(attempt_text: str) -> bool:
+    status = header_value(attempt_text, "Status")
     if status not in {"done", "reviewed"}:
         return False
-    return has_content(section_content(iteration_text, "Changed Files")) and has_content(section_content(iteration_text, "Verification"))
+    return has_content(section_content(attempt_text, "Changed Files")) and has_content(section_content(attempt_text, "Verification"))
 
 
-def iteration_has_blockers(iteration_text: str) -> bool:
-    return blocking_present(section_content(iteration_text, "Blockers"))
+def attempt_has_blockers(attempt_text: str) -> bool:
+    return blocking_present(section_content(attempt_text, "Blockers"))
 
 
 def unresolved_reviews_for_task(root: Path, task_id: str) -> list[Path]:

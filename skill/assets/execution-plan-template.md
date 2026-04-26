@@ -1,0 +1,78 @@
+# x Architect Execution Plan: {plan_id}
+
+Status: {status}
+Architect Gate Status: not-run
+Final Verification Status: {final_verification_status}
+Date: {date}
+Linked Run: {run_id}
+Linked Contract: {contract_id}
+Integration Worktree: {integration_worktree}
+Integration Branch: {integration_branch}
+
+## Objective
+
+{objective}
+
+## Parallel Lanes
+
+{parallel_lanes}
+
+## Task Dependency Graph
+
+{dependency_graph}
+
+## Lane Session Ownership
+
+{lane_ownership}
+
+## Scope Boundaries
+
+Allowed:
+{allowed_scope}
+
+Forbidden:
+{forbidden_scope}
+
+## Expected Artifacts
+
+{expected_artifacts}
+
+## Verification Matrix
+
+{verification_matrix}
+
+## Reviewer Criteria
+
+{reviewer_criteria}
+
+## Architect Merge Criteria
+
+{architect_merge_criteria}
+
+## Integration Order
+
+{integration_order}
+
+## Known Risks
+
+{known_risks}
+
+## Loopback Triggers
+
+{loopback_triggers}
+
+## Blocked-State Recovery
+
+{blocked_recovery}
+
+## Root Decisions Needed
+
+{root_decisions}
+
+## Gate Result
+
+Pending.
+
+## Final Verification Evidence
+
+{final_verification}

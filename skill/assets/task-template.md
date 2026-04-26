@@ -29,11 +29,11 @@ Linked Contract: {contract_id}
 
 {done_evidence}
 
-## Iterations
+## Attempts
 
 Pending.
 
-## Latest Ready Iteration
+## Latest Ready Attempt
 
 Pending.
 

@@ -1,12 +1,17 @@
-# x Iteration: {iteration_id}
+# x Attempt: {attempt_id}
 
 Status: {status}
 Kind: {kind}
-Agent Policy: {agent_policy}
+Input Package: pending
+Output Evidence: pending
+Started At: {started_at}
+Completed At: pending
 Date: {date}
 Linked Run: {run_id}
 Linked Task: {task_id}
+Linked Lane: {lane_id}
 Source Review: {source_review_id}
+Source Architect Review: {source_architect_review_id}
 
 ## Title
 
