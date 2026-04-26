@@ -38,18 +38,15 @@ Users talk to `$x`. The bundled `x_state.py` script is internal plumbing for rec
 
 ## How The Loop Works
 
-```text
-direction room -> root decision -> architect room -> accepted Architecture Brief
--> integration worktree -> Architect Execution Plan -> readiness gate
--> lane worktrees -> attempts and reviews -> architect merge review
--> serial integration -> merge-ready gate -> merge-back recommendation
-```
+![x rooms and lanes diagram showing role rooms, architect brief and plan, lane implementation review fix loops, architect directive loop, architect review, merge-ok, and the merge-ready gate](docs/images/x-rooms-and-lanes.png)
+
+_Rooms shape direction; lanes run implementation, code review, and fix-pass loops; architect directives and `merge-ok` control the path to the merge-ready gate._
 
 Direction work happens before architecture when root wants to shape or challenge a direction. The visible room keeps role identity clear, for example product, technical, strategy, challenger, architect, and main.
 
 The architect room turns accepted direction into execution boundaries. After root accepts the Architecture Brief, `x` materializes an integration worktree and requires a gated Architect Execution Plan before any lane work starts.
 
-Execution happens in lanes. Engineers implement bounded attempts in lane worktrees, reviewers inspect those attempts, and the architect decides whether each lane is fit to integrate. Integration remains serial even when lane work and reviews run in parallel.
+Execution happens in lanes. Engineers make bounded implementation or fix passes in lane worktrees, reviewers inspect the resulting evidence, and the architect decides whether each lane is fit to integrate. Integration remains serial even when lane work and reviews run in parallel.
 
 Close is a gate, not a feeling. `x` checks planned lanes, reviews, architect approvals, integration status, risks, and final verification before recommending merge-back.
 
