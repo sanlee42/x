@@ -15,7 +15,10 @@ DISCUSSION_TURN_KINDS = ("statement", "question", "viewpoint", "challenge", "cri
 ROLE_BRIEF_STATUSES = ("draft", "ready", "superseded")
 ARCHITECT_INTAKE_STATUSES = ("draft", "accepted", "superseded")
 ROLE_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
-RESERVED_ROLE_NAMES = {"root", "main", "engineer", "reviewer", "councilor"}
+PARTICIPANT_PRESETS = {
+    "company-council": ("founder", "cto", "product-lead", "growth", "challenger"),
+}
+RESERVED_ROLE_NAMES = {"root", "main", "engineer", "reviewer", "councilor", *PARTICIPANT_PRESETS}
 
 
 def command_discussion_start(args: argparse.Namespace) -> None:
@@ -149,8 +152,58 @@ def command_discussion_synthesize(args: argparse.Namespace) -> None:
     missing = missing_independent_role_briefs(root, discussion)
     if missing:
         raise SystemExit("independent discussion synthesis requires role briefs for: " + ", ".join(missing))
+    core_judgment = (getattr(args, "core_judgment", None) or args.agreements).strip()
+    key_arguments = (getattr(args, "key_arguments", None) or args.agreements).strip()
+    document_use_notes = (
+        getattr(args, "document_use_notes", None)
+        or "Use this Room Essence as advisory source material for BRD, PRD, strategy, sales, and architect-intake writing. It is not execution authority until root records an accepted decision."
+    ).strip()
     synthesis = "\n".join(
         [
+            "### Room Essence",
+            "",
+            "#### Core Judgment",
+            "",
+            core_judgment,
+            "",
+            "#### Recommended Direction",
+            "",
+            args.recommended_direction.strip(),
+            "",
+            "#### Key Arguments",
+            "",
+            key_arguments,
+            "",
+            "#### Objections / Conflicts",
+            "",
+            args.conflicts.strip(),
+            "",
+            f"Strongest objection: {args.strongest_objection.strip()}",
+            "",
+            "#### Rejected Options",
+            "",
+            args.rejected_options.strip(),
+            "",
+            "#### Weakest Assumptions",
+            "",
+            args.weakest_assumption.strip(),
+            "",
+            "#### Evidence To Change",
+            "",
+            args.evidence_to_change.strip(),
+            "",
+            "#### Open Root Decisions",
+            "",
+            args.root_decisions_needed.strip(),
+            "",
+            "#### Document-Use Notes",
+            "",
+            document_use_notes,
+            "",
+            "#### Architect Intake Draft",
+            "",
+            args.architect_intake_draft.strip(),
+            "",
             "### Agreements",
             "",
             args.agreements.strip(),
@@ -344,6 +397,10 @@ def command_role_list(args: argparse.Namespace) -> None:
     print("## Legacy Aliases")
     for alias, target in sorted(LEGACY_ROLE_ALIASES.items()):
         print(f"- {alias} -> {target}")
+    print()
+    print("## Participant Presets")
+    for preset, participants in sorted(PARTICIPANT_PRESETS.items()):
+        print(f"- {preset}: {', '.join(participants)}")
 
 
 def command_role_show(args: argparse.Namespace) -> None:
@@ -374,7 +431,7 @@ def command_role_set(args: argparse.Namespace) -> None:
             handoff_value=(args.handoff_value or "Produce findings that help root decide and help architect avoid guessing during intake.").strip(),
             failure_modes=(args.failure_modes or "Generic advice, hidden assumptions, scope creep, and bypassing architect-to-code gates.").strip(),
             out_of_bounds=(args.out_of_bounds or "Do not create execution tasks, manage lanes, assign reviewers, or issue architect directives.").strip(),
-            output_format=(args.output_format or "Return stance, reasons, objections, weakest assumption, evidence that would change the stance, and questions needing root decision.").strip(),
+            output_format=(args.output_format or "Return stance, reasons, objections, rejected options, weakest assumption, evidence that would change the stance, document-use notes, and questions needing root decision.").strip(),
         )
     path = state_dirs(root)["roles"] / f"{role}.md"
     write(path, content, args.dry_run)
@@ -420,9 +477,11 @@ def normalized_participants(root: Path, values: list[str]) -> list[str]:
             raw_role = item.strip()
             if not raw_role:
                 continue
-            role = normalize_role_reference(root, raw_role)
-            if role not in participants:
-                participants.append(role)
+            roles = PARTICIPANT_PRESETS.get(raw_role.lower(), (raw_role,))
+            for preset_role in roles:
+                role = normalize_role_reference(root, preset_role)
+                if role not in participants:
+                    participants.append(role)
     if not participants:
         raise SystemExit("--participants is required")
     return participants

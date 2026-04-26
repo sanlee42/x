@@ -16,6 +16,7 @@ $x close                   close with gates and recommendation
 
 $x discussion: <topic>     discuss direction before architecture
 $x council: <topic>        synthesize multiple role views
+$x company-council: <topic> founder/cto/product-lead/growth/challenger room
 $x with <role>: <question> ask one configured role
 $x product: <question>     discuss product shape and user path
 $x technical: <question>   discuss technical boundary and risk
@@ -29,7 +30,7 @@ Users talk to `$x`. The bundled `x_state.py` script is internal plumbing for rec
 
 `x` keeps architecture, execution, review, and close decisions explicit:
 
-- Turns product, technical, strategy, challenger, council, or architect discussion into durable direction.
+- Turns product, technical, strategy, founder, CTO, product-lead, growth, challenger, council, or architect discussion into durable direction.
 - Records root decisions before treating discussion output as accepted work.
 - Converts accepted direction into an Architecture Brief, Technical Contract, and Architect Execution Plan.
 - Splits implementation into lane worktrees with scoped ownership and verification expectations.
@@ -42,7 +43,7 @@ Users talk to `$x`. The bundled `x_state.py` script is internal plumbing for rec
 
 _Rooms shape direction; lanes run implementation, code review, and fix-pass loops; architect directives and `merge-ok` control the path to the merge-ready gate._
 
-Direction work happens before architecture when root wants to shape or challenge a direction. The visible room keeps role identity clear, for example product, technical, strategy, challenger, architect, and main.
+Direction work happens before architecture when root wants to shape or challenge a direction. The visible room keeps role identity clear, for example product, technical, strategy, founder, CTO, product-lead, growth, challenger, architect, and main. Room output is summarized as `Room Essence` so main can later draft a BRD, PRD, strategy document, sales strategy, or architect intake from the same advisory source.
 
 The architect room turns accepted direction into execution boundaries. After root accepts the Architecture Brief, `x` materializes an integration worktree and requires a gated Architect Execution Plan before any lane work starts.
 
@@ -52,7 +53,7 @@ Close is a gate, not a feeling. `x` checks planned lanes, reviews, architect app
 
 ## Core Concepts
 
-- **Rooms:** Visible root-facing conversations with named participants. Discussion output is advisory until root records a decision.
+- **Rooms:** Visible root-facing conversations with named participants. Discussion output is advisory until root records a decision, and final synthesis is captured as `Room Essence`.
 - **Architect:** Owns execution shape, technical boundaries, directives, and merge review.
 - **Lanes:** Isolated implementation scopes that can run in parallel when the plan and dependencies allow it.
 - **Gates:** Simple checkable transitions that prevent premature lane work, integration, and close.

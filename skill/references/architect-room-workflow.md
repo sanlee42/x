@@ -11,24 +11,25 @@ Use this when `$x architect` starts or `$x resume` needs to continue execution w
 
 ## Optional Interaction Handoff
 
-Root-facing interaction is an advisory layer before architect execution. Use it when root asks for product, technical, strategy, challenger, or custom role discussion before committing to an architecture direction.
+Root-facing interaction is an advisory layer before architect execution. Use it when root asks for product, technical, strategy, founder, CTO, product-lead, growth, challenger, company-council, or custom role discussion before committing to an architecture direction.
 
 Typical interaction state helper flow:
 
 ```bash
 python ~/.codex/skills/x/scripts/x_state.py role-list
 python ~/.codex/skills/x/scripts/x_state.py interaction-start --mode joint --title "<topic>" --agenda "<root thesis or question>" --participants product technical strategy
+# For `$x company-council: <topic>`, use `--participants company-council`
 python ~/.codex/skills/x/scripts/x_state.py interaction-turn --interaction-id "<interaction-id>" --actor root --turn-kind statement --body "<root thesis>"
 python ~/.codex/skills/x/scripts/x_state.py package --role councilor --interaction-id "<interaction-id>" --council-role technical
 python ~/.codex/skills/x/scripts/x_state.py role-brief --interaction-id "<interaction-id>" --role technical --title "<brief>" --recommendation "<stance>" --rationale "<why>" --rejected-options "<rejected>" --risks "<risks>" --decisions-needed "<root decisions>" --implications-for-architect "<handoff notes>" --strongest-objection "<objection>" --weakest-assumption "<assumption>" --evidence-to-change "<evidence>"
-python ~/.codex/skills/x/scripts/x_state.py interaction-summarize --interaction-id "<interaction-id>" --agreements "<agreements>" --conflicts "<conflicts>" --rejected-options "<rejected>" --root-decisions-needed "<decisions>" --recommended-direction "<proposal>" --architect-intake-draft "<draft>" --strongest-objection "<objection>" --weakest-assumption "<assumption>" --evidence-to-change "<evidence>"
+python ~/.codex/skills/x/scripts/x_state.py interaction-summarize --interaction-id "<interaction-id>" --agreements "<agreements>" --core-judgment "<core judgment>" --key-arguments "<arguments>" --conflicts "<conflicts>" --rejected-options "<rejected>" --root-decisions-needed "<decisions>" --recommended-direction "<proposal>" --architect-intake-draft "<draft>" --strongest-objection "<objection>" --weakest-assumption "<assumption>" --evidence-to-change "<evidence>" --document-use-notes "<document notes>"
 python ~/.codex/skills/x/scripts/x_state.py decision --interaction-id "<interaction-id>" --title "<decision>" --decision "<accepted direction>"
 python ~/.codex/skills/x/scripts/x_state.py architect-intake --interaction-id "<interaction-id>" --decision-id "<decision-id>" --status accepted --title "<intake>" --accepted-direction "<accepted direction>" --architecture-input "<architect input>" --scope-boundaries "<scope>" --non-goals "<non-goals>" --root-decisions "<decisions>" --risks "<risks>" --handoff-to-architect "<handoff>"
 ```
 
 Compatibility commands and fields still use `discussion` naming in some places because runtime state is stored under `discussions/<id>.md`, but new root-facing docs and examples should prefer `interaction-*` and `--interaction-id`.
 
-Interaction role views must not create Engineer Tasks, start attempts, manage lanes, assign reviewers, or issue architect directives. They produce compressed advisory state only. Accepted architect intake is the handoff into the architect room.
+Interaction role views must not create Engineer Tasks, start attempts, manage lanes, assign reviewers, or issue architect directives. They produce compressed advisory state only. Interaction summaries write `Room Essence` in the existing `Synthesis` section; accepted architect intake is the handoff into the architect room.
 
 ## Main Flow
 

@@ -21,13 +21,22 @@ class XStateDiscussionTests(XStateTestCase):
         self.assertIn("strategy (default)", roles)
         self.assertIn("technical (default)", roles)
         self.assertIn("product (default)", roles)
+        self.assertIn("founder (default)", roles)
+        self.assertIn("cto (default)", roles)
+        self.assertIn("product-lead (default)", roles)
+        self.assertIn("growth (default)", roles)
         self.assertIn("product-acceptance -> product", roles)
+        self.assertIn("company-council: founder, cto, product-lead, growth, challenger", roles)
 
         product = self.x("role-show", "product").stdout
         self.assertIn("## Use When", product)
         self.assertIn("user path", product)
         self.assertIn("unacceptable experience", product)
         self.assertIn("Acceptance/QA", product)
+        founder = self.x("role-show", "founder").stdout
+        self.assertIn("company-level judgment", founder)
+        growth = self.x("role-show", "growth").stdout
+        self.assertIn("target segment", growth)
 
         self.x(
             "role-set",
@@ -70,6 +79,40 @@ class XStateDiscussionTests(XStateTestCase):
         self.assertIn("reserved role name: engineer", failed.stderr + failed.stdout)
 
         self.assertNotIn("- engineer ", self.x("role-list").stdout)
+
+    def test_company_council_preset_expands_and_packages_default_roles(self) -> None:
+        self.x(
+            "interaction-start",
+            "--mode",
+            "joint",
+            "--title",
+            "Company decision",
+            "--agenda",
+            "Should this become a company direction?",
+            "--participants",
+            "company-council",
+            "--interaction-id",
+            "inter-company",
+        )
+        interaction = self.discussion_file("inter-company").read_text(encoding="utf-8")
+        self.assertIn("Participants: founder, cto, product-lead, growth, challenger", interaction)
+
+        self.x(
+            "package",
+            "--role",
+            "councilor",
+            "--interaction-id",
+            "inter-company",
+            "--council-role",
+            "growth",
+            "--package-id",
+            "pkg-growth",
+        )
+        package = self.package_file("pkg-growth").read_text(encoding="utf-8")
+        self.assertIn("Role: councilor", package)
+        self.assertIn("# x Role Card: growth", package)
+        self.assertIn("document-use notes", package)
+        self.assertIn("pkg-growth: councilor/growth", self.discussion_file("inter-company").read_text(encoding="utf-8"))
 
     def test_interaction_alias_supports_single_custom_role_loop(self) -> None:
         self.x(
@@ -119,6 +162,10 @@ class XStateDiscussionTests(XStateTestCase):
             "inter-ops",
             "--agreements",
             "Manual launch can be v1.",
+            "--core-judgment",
+            "Manual launch is acceptable only as a bounded first proof.",
+            "--key-arguments",
+            "The runbook keeps launch cost low while exposing rollback risk.",
             "--conflicts",
             "Rollback detail is unresolved.",
             "--rejected-options",
@@ -135,10 +182,17 @@ class XStateDiscussionTests(XStateTestCase):
             "The first launch is low volume.",
             "--evidence-to-change",
             "A dry run shows manual steps are unreliable.",
+            "--document-use-notes",
+            "BRD and sales strategy may claim manual launch, but must not imply repeatable automation.",
         )
         interaction = self.discussion_file("inter-ops").read_text(encoding="utf-8")
         self.assertIn("Status: synthesized", interaction)
         self.assertIn("ops / response", interaction)
+        self.assertIn("### Room Essence", interaction)
+        self.assertIn("#### Core Judgment", interaction)
+        self.assertIn("Manual launch is acceptable only as a bounded first proof.", interaction)
+        self.assertIn("#### Document-Use Notes", interaction)
+        self.assertIn("BRD and sales strategy may claim manual launch", interaction)
         self.assertIn("Proceed with a manual launch runbook.", interaction)
 
     def test_interaction_turns_record_audience_and_print_transcript(self) -> None:

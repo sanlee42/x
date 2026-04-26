@@ -22,7 +22,7 @@ Use this skill when the user says:
 - `$x`, `$x help`, `$x commands`, or `$x ?`
 - `$x architect`, `$x architect: <goal>`, or `x architect`
 - `$x status`, `$x resume`, `$x checkpoint`, `$x close`
-- `$x discussion`, `$x with <role>`, `$x council`, `$x product`, `$x technical`, `$x strategy`, or another configured interaction role for root-facing direction interaction before architecture
+- `$x discussion`, `$x with <role>`, `$x council`, `$x company-council`, `$x product`, `$x technical`, `$x strategy`, or another configured interaction role for root-facing direction interaction before architecture
 
 Do not use `$x start engineering` as the user-facing entry. `Engineering Loop` is the lower execution layer behind the architect room.
 
@@ -41,6 +41,7 @@ $x close                    close with gates and recommendation
 
 $x discussion: <topic>      discuss direction before architecture
 $x council: <topic>         synthesize multiple role views
+$x company-council: <topic> founder/cto/product-lead/growth/challenger room
 $x with <role>: <question>  ask one configured role
 $x product: <question>      product shape and user path
 $x technical: <question>    technical boundary and risk
@@ -52,17 +53,17 @@ Mention that `x_state.py` commands are internal state tools, not root-facing com
 
 ## Fresh Instruction Reload
 
-At the start of every non-help `$x architect`, `$x discussion`, `$x with <role>`, `$x council`, `$x product`, `$x technical`, `$x strategy`, `$x status`, `$x resume`, `$x checkpoint`, or `$x close` turn, main agent must reread the currently installed `~/.codex/skills/x/SKILL.md` before deciding what to do. Do not rely on stale remembered x workflow rules.
+At the start of every non-help `$x architect`, `$x discussion`, `$x with <role>`, `$x council`, `$x company-council`, `$x product`, `$x technical`, `$x strategy`, `$x status`, `$x resume`, `$x checkpoint`, or `$x close` turn, main agent must reread the currently installed `~/.codex/skills/x/SKILL.md` before deciding what to do. Do not rely on stale remembered x workflow rules.
 
 For `$x architect`, execution-oriented `$x resume`, lane work, reviews, integration, or close decisions, main agent must also reread the relevant installed execution role prompts from `~/.codex/agents/` (`architect.toml`, `engineer.toml`, `reviewer.toml`) before using those roles.
 
-For `$x discussion`, `$x with <role>`, `$x council`, `$x product`, `$x technical`, `$x strategy`, `$x challenger`, and other root-facing interaction turns, the role sources are configurable markdown role cards, not global agent prompt files. Main agent must read the configured interaction role cards from runtime state or default skill assets. Do not look for `product.toml`, `technical.toml`, `strategy.toml`, `challenger.toml`, or `councilor.toml` under `~/.codex/agents/`; their absence is expected and is not an install failure.
+For `$x discussion`, `$x with <role>`, `$x council`, `$x company-council`, `$x product`, `$x technical`, `$x strategy`, `$x challenger`, and other root-facing interaction turns, the role sources are configurable markdown role cards, not global agent prompt files. Main agent must read the configured interaction role cards from runtime state or default skill assets. Do not look for `product.toml`, `technical.toml`, `strategy.toml`, `challenger.toml`, `founder.toml`, `cto.toml`, `product-lead.toml`, `growth.toml`, or `councilor.toml` under `~/.codex/agents/`; their absence is expected and is not an install failure.
 
 Newly spawned architect, engineer, and reviewer agents must use the latest installed prompts. If a role agent was spawned before the latest x instruction change, treat its output as potentially stale for changed workflow behavior and use a fresh role package/subagent for decisions affected by the change.
 
 ## Interaction Room Continuity
 
-Once root starts a `$x discussion`, `$x council`, `$x with <role>`, `$x product`, `$x technical`, `$x strategy`, `$x challenger`, or other root-facing interaction, main must treat it as an active room until root explicitly asks to synthesize, decide, close, supersede, or switch rooms.
+Once root starts a `$x discussion`, `$x council`, `$x company-council`, `$x with <role>`, `$x product`, `$x technical`, `$x strategy`, `$x challenger`, or other root-facing interaction, main must treat it as an active room until root explicitly asks to synthesize, decide, close, supersede, or switch rooms.
 
 If root sends a follow-up in natural language and exactly one active interaction exists, continue that interaction even if root omits `$x`. If multiple active interactions exist, ask which interaction to continue before answering as roles.
 
@@ -99,7 +100,7 @@ Load only the references needed for the current action:
 - Before architect integration review or merge-ok decisions: read [`references/architect-review-policy.md`](references/architect-review-policy.md).
 - When lane heartbeat, underused parallelism, scope drift, weak verification, repeated fix loops, quota/context risk, or integration-batch signals appear: read [`references/active-architect-observation.md`](references/active-architect-observation.md).
 - `$x status`, `$x checkpoint`, `$x close`, and pre-close checks: read [`references/gates-and-close-policy.md`](references/gates-and-close-policy.md).
-- Root discussion/interaction, council/合议, strategy, technical, product, challenger, or Acceptance/QA discussion: read [`references/root-interaction-design.md`](references/root-interaction-design.md). Acceptance/QA gate behavior is still future-layer design.
+- Root discussion/interaction, council/合议, company-council, strategy, technical, product, challenger, or Acceptance/QA discussion: read [`references/root-interaction-design.md`](references/root-interaction-design.md). Acceptance/QA gate behavior is still future-layer design.
 
 ## State Tool
 
@@ -115,7 +116,7 @@ The script owns `.x/project/profile.md` in the product repo and runtime markdown
 
 - `root`: the user; owns direction, final merge authority, irreversible decisions, and explicit merge/push/PR authorization.
 - `main agent`: orchestrates, does repo/context intake, writes `.x` state, materializes the integration worktree, starts gated lane worktrees, runs gates, and reports to root.
-- `interaction role views`: configurable upper-layer role cards, with default templates for `strategy`, `technical`, `product`, `architect`, and `challenger`; they produce turns and optional formal role briefs for root decision-making and must not manage execution. `product` owns product shape and user path, not Acceptance/QA.
+- `interaction role views`: configurable upper-layer role cards, with default templates for `strategy`, `technical`, `product`, `architect`, `founder`, `cto`, `product-lead`, `growth`, and `challenger`; they produce turns and optional formal role briefs for root decision-making and must not manage execution. `product` owns product shape and user path, not Acceptance/QA.
 - `architect`: co-creates the Architecture Brief with root, converts accepted direction into technical boundaries, produces the Architect Execution Plan, observes execution, issues architect directives, and performs architect integration review.
 - `engineer`: implements only one bounded lane attempt or fix attempt and returns patch evidence.
 - `reviewer`: independently reviews patch evidence against the contract, execution plan, lane, task, diff, tests, and repo constraints.
@@ -132,7 +133,8 @@ The root control root normally starts on `master/main`. The run's materialized w
 - Interaction outputs are advisory until root records a decision; accepted Architect Intakes require an accepted root decision.
 - Root-facing `with`, `joint`, `council`, and role interactions are visible conversations first. Main must show the actual role turns to root in the normal assistant reply and record them with `interaction-turn`; synthesis/proposal is a later step and must not replace the visible exchange.
 - Every recorded interaction turn must have a clear speaker and audience. Use `interaction-turn --actor <role> --to <root|role|all>` so roles know whether they are answering root, another role, or the whole room.
-- Role briefs and interaction synthesis/proposals must include strongest objection, weakest assumption, and evidence that would change the recommendation.
+- Role briefs must include strongest objection, weakest assumption, and evidence that would change the recommendation.
+- Interaction synthesis/proposals must write a `Room Essence` inside the existing `Synthesis` section with core judgment, recommended direction, key arguments, objections/conflicts, rejected options, weakest assumptions, evidence to change, open root decisions, and document-use notes. This is the shared advisory source for later BRD, PRD, strategy, sales, or architect-intake writing; it is not a new workflow or execution authority.
 - No materialized execution worktree and gated Architect Execution Plan, no lane work.
 - Reviewer `ready` is code-review evidence only; architect `merge-ok` is required before integration.
 - Architect directives are the control surface for pause, resume, replan, continue, parallelism/verification adjustments, requests for evidence, and root decisions.

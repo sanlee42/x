@@ -29,6 +29,10 @@ Root still primarily talks to main in natural language. Main records durable sta
 - `strategy`: business value, priority, sequencing, non-goals, and stop conditions.
 - `technical`: technical investment, system boundaries, architecture risk, shared platform direction.
 - `product`: what to build, user path, v1 feature shape, unacceptable experience, and product tradeoffs.
+- `founder`: company-level judgment, focus, opportunity cost, credibility, and root-owned tradeoffs.
+- `cto`: company-level technical credibility, system boundary, delivery risk, and operability implications.
+- `product-lead`: product leadership view for customer problem, v1 promise, product claims, and document-safe scope.
+- `growth`: target segment, channel, sales motion, positioning proof, and adoption risk.
 - `architect`: execution architect. Converts accepted architect intake into Architecture Brief, Technical Contract, Architect Execution Plan, lane integration policy, and root-facing checkpoints.
 - `challenger`: optional role view for high-risk or root-requested critique.
 - `engineer` and `reviewer`: remain lower-layer execution roles and are not managed by interaction roles.
@@ -43,9 +47,9 @@ Roles are configurable markdown cards under runtime state:
 ~/.x/projects/<project-key>/roles/<role>.md
 ```
 
-Default role-card templates are provided for `strategy`, `technical`, `product`, `challenger`, and `architect`. These interaction role cards are distinct from the installed execution agent prompts under `~/.codex/agents/`. Council and interaction turns should not expect global `product.toml`, `technical.toml`, `strategy.toml`, `challenger.toml`, or `councilor.toml` files; those roles are loaded from markdown role cards.
+Default role-card templates are provided for `strategy`, `technical`, `product`, `architect`, `founder`, `cto`, `product-lead`, `growth`, and `challenger`. These interaction role cards are distinct from the installed execution agent prompts under `~/.codex/agents/`. Council and interaction turns should not expect global `product.toml`, `technical.toml`, `strategy.toml`, `challenger.toml`, `founder.toml`, `cto.toml`, `product-lead.toml`, `growth.toml`, or `councilor.toml` files; those roles are loaded from markdown role cards.
 
-Root can ask main to add or modify roles such as `ops`, `data`, `growth`, or `support`; main records them with:
+Root can ask main to add or modify roles such as `ops`, `data`, `support`, or `finance`; main records them with:
 
 ```bash
 python ~/.codex/skills/x/scripts/x_state.py role-list
@@ -70,6 +74,14 @@ python ~/.codex/skills/x/scripts/x_state.py interaction-start --mode joint --tit
 python ~/.codex/skills/x/scripts/x_state.py interaction-turn --interaction-id "<interaction-id>" --actor root --to all --turn-kind statement --body "<root thesis>"
 python ~/.codex/skills/x/scripts/x_state.py interaction-turn --interaction-id "<interaction-id>" --actor product --to all --turn-kind viewpoint --body "<product turn>"
 ```
+
+Use the `company-council` participant preset when root asks for `$x company-council: <topic>` or an equivalent company decision room:
+
+```bash
+python ~/.codex/skills/x/scripts/x_state.py interaction-start --mode joint --title "Company council" --agenda "<topic>" --participants company-council
+```
+
+This expands to `founder`, `cto`, `product-lead`, `growth`, and `challenger`. The preset is only a room roster shortcut; it does not create a separate workflow or grant company roles execution authority.
 
 Use `interaction-start --mode independent` when root needs unpolluted first-pass role views:
 
@@ -116,15 +128,33 @@ root decision > accepted architect intake > accepted Architecture Brief > role b
 
 Record meanings:
 
-- `interaction`: agenda/root thesis, participants, compressed turns, linked role briefs, synthesis/proposal, linked architect intake, linked root decisions, and packages.
+- `interaction`: agenda/root thesis, participants, compressed turns, linked role briefs, `Room Essence` in synthesis/proposal, linked architect intake, linked root decisions, and packages.
 - `role brief`: one role's formal view: recommendation, rationale, rejected options, risks, decisions needed, implications for architect, and required challenge fields.
 - `decision`: root's accepted decision and its consequences, optionally linked to an interaction and architect intake.
 - `architect intake`: decision-complete input architect may use to create or revise Architecture Brief and Execution Plan.
 - `board`: generated root-facing summary across active interactions, accepted intakes, root decisions, active runs, and risks.
 
+## Room Essence
+
+Every `with`, `joint`, independent/council, or ordinary root-facing interaction resolves into one `Room Essence` inside the existing interaction `Synthesis` section. It is the shared advisory source that main can later use to write a BRD, PRD, strategy document, sales strategy, or architect intake draft.
+
+Required fields:
+
+- core judgment
+- recommended direction
+- key arguments
+- objections / conflicts
+- rejected options
+- weakest assumptions
+- evidence to change
+- open root decisions
+- document-use notes
+
+The `Room Essence` is not a root decision. It becomes execution-relevant only after root records a decision and, when needed, accepts an architect intake.
+
 ## Challenger Requirement
 
-Challenger thinking is required in every role brief and interaction summary. The required fields are:
+Challenger thinking is required in every role brief and interaction summary. Role briefs keep explicit challenge fields; interaction summaries carry them into `Room Essence`, with strongest objection folded into objections/conflicts. The required challenge fields are:
 
 - strongest objection
 - weakest assumption
@@ -178,7 +208,8 @@ Future Acceptance `changes-requested` must return to architect. Acceptance must 
 ### Implemented V1: Root Interaction
 
 - `interaction-start`, `interaction-turn`, `interaction-summarize`, plus compatibility `discussion-start`, `discussion-turn`, `discussion-synthesize`, `role-brief`, `architect-intake`, and `board`.
-- Configurable role cards with defaults for `strategy`, `technical`, `product`, `architect`, and `challenger`.
+- Configurable role cards with defaults for `strategy`, `technical`, `product`, `architect`, `founder`, `cto`, `product-lead`, `growth`, and `challenger`.
+- `company-council` participant preset for `founder`, `cto`, `product-lead`, `growth`, and `challenger`.
 - `package --role councilor --interaction-id ... --council-role ...` for role brief inputs.
 - `decision` links to interaction and architect intake.
 - Accepted architect intake requires an accepted root decision.

@@ -181,6 +181,8 @@ def build_parser() -> argparse.ArgumentParser:
     discussion_synthesize.add_argument("--discussion-id", dest="discussion_id")
     discussion_synthesize.add_argument("--interaction-id", dest="discussion_id")
     discussion_synthesize.add_argument("--agreements", required=True)
+    discussion_synthesize.add_argument("--core-judgment")
+    discussion_synthesize.add_argument("--key-arguments")
     discussion_synthesize.add_argument("--conflicts", required=True)
     discussion_synthesize.add_argument("--rejected-options", required=True)
     discussion_synthesize.add_argument("--root-decisions-needed", required=True)
@@ -189,6 +191,7 @@ def build_parser() -> argparse.ArgumentParser:
     discussion_synthesize.add_argument("--strongest-objection", required=True)
     discussion_synthesize.add_argument("--weakest-assumption", required=True)
     discussion_synthesize.add_argument("--evidence-to-change", required=True)
+    discussion_synthesize.add_argument("--document-use-notes")
     discussion_synthesize.add_argument("--dry-run", action="store_true")
     discussion_synthesize.set_defaults(func=command_discussion_synthesize)
 
@@ -196,6 +199,8 @@ def build_parser() -> argparse.ArgumentParser:
     interaction_summarize.add_argument("--interaction-id", dest="discussion_id")
     interaction_summarize.add_argument("--discussion-id", dest="discussion_id")
     interaction_summarize.add_argument("--agreements", required=True)
+    interaction_summarize.add_argument("--core-judgment")
+    interaction_summarize.add_argument("--key-arguments")
     interaction_summarize.add_argument("--conflicts", required=True)
     interaction_summarize.add_argument("--rejected-options", required=True)
     interaction_summarize.add_argument("--root-decisions-needed", required=True)
@@ -204,6 +209,7 @@ def build_parser() -> argparse.ArgumentParser:
     interaction_summarize.add_argument("--strongest-objection", required=True)
     interaction_summarize.add_argument("--weakest-assumption", required=True)
     interaction_summarize.add_argument("--evidence-to-change", required=True)
+    interaction_summarize.add_argument("--document-use-notes")
     interaction_summarize.add_argument("--dry-run", action="store_true")
     interaction_summarize.set_defaults(func=command_discussion_synthesize)
 
