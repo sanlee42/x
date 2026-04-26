@@ -131,6 +131,66 @@ class XStateDiscussionTests(XStateTestCase):
         self.assertIn("ops / response", interaction)
         self.assertIn("Proceed with a manual launch runbook.", interaction)
 
+    def test_interaction_turns_record_audience_and_print_transcript(self) -> None:
+        self.x(
+            "interaction-start",
+            "--mode",
+            "joint",
+            "--title",
+            "Visible joint direction",
+            "--agenda",
+            "Keep role conversation visible.",
+            "--participants",
+            "product",
+            "technical",
+            "--interaction-id",
+            "inter-visible",
+        )
+        first = self.x(
+            "interaction-turn",
+            "--interaction-id",
+            "inter-visible",
+            "--actor",
+            "root",
+            "--to",
+            "product",
+            "--turn-kind",
+            "question",
+            "--body",
+            "What user path should this protect?",
+        )
+        self.assertIn("# x Interaction Transcript: inter-visible", first.stdout)
+        self.assertIn("## Room Roster", first.stdout)
+        self.assertIn("- root: direction owner", first.stdout)
+        self.assertIn("- main: facilitator and recorder", first.stdout)
+        self.assertIn("- product: active role view", first.stdout)
+        self.assertIn("To: product", first.stdout)
+        self.assertIn("What user path should this protect?", first.stdout)
+
+        self.synthesize("inter-visible")
+        second = self.x(
+            "interaction-turn",
+            "--interaction-id",
+            "inter-visible",
+            "--actor",
+            "product",
+            "--to",
+            "all",
+            "--turn-kind",
+            "response",
+            "--body",
+            "The flow must keep the buyer's next action obvious.",
+        )
+        self.assertIn("Status: active", second.stdout)
+        self.assertIn("To: product", second.stdout)
+        self.assertIn("To: all", second.stdout)
+        self.assertIn("The flow must keep the buyer's next action obvious.", second.stdout)
+        self.assertIn("Status: active", self.discussion_file("inter-visible").read_text(encoding="utf-8"))
+
+        shown = self.x("interaction-show", "--interaction-id", "inter-visible")
+        self.assertIn("## Turns", shown.stdout)
+        self.assertIn("To: all", shown.stdout)
+
     def test_interaction_id_aliases_work_for_formal_records(self) -> None:
         self.x(
             "interaction-start",
@@ -386,6 +446,8 @@ class XStateDiscussionTests(XStateTestCase):
         package = self.package_file("pkg-tech").read_text(encoding="utf-8")
         self.assertIn("Role: councilor", package)
         self.assertIn("Produce a technical role brief", package)
+        self.assertIn("Conversation Contract:", package)
+        self.assertIn("Visible Turn", package)
         self.assertIn("Do not create execution tasks", package)
         discussion = self.discussion_file("disc-tech").read_text(encoding="utf-8")
         self.assertIn("brief-tech: technical", discussion)

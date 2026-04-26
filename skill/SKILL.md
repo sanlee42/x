@@ -60,6 +60,25 @@ For `$x discussion`, `$x with <role>`, `$x council`, `$x product`, `$x technical
 
 Newly spawned architect, engineer, and reviewer agents must use the latest installed prompts. If a role agent was spawned before the latest x instruction change, treat its output as potentially stale for changed workflow behavior and use a fresh role package/subagent for decisions affected by the change.
 
+## Interaction Room Continuity
+
+Once root starts a `$x discussion`, `$x council`, `$x with <role>`, `$x product`, `$x technical`, `$x strategy`, `$x challenger`, or other root-facing interaction, main must treat it as an active room until root explicitly asks to synthesize, decide, close, supersede, or switch rooms.
+
+If root sends a follow-up in natural language and exactly one active interaction exists, continue that interaction even if root omits `$x`. If multiple active interactions exist, ask which interaction to continue before answering as roles.
+
+Every room response must keep identities visible:
+
+```text
+Room: <interaction-id>
+Participants: root, main, product, technical, ...
+Speaking:
+- product -> root: ...
+- technical -> product/all: ...
+- main -> root: facilitator note only, if needed.
+```
+
+Do not answer a room turn as an undifferentiated main agent unless root asks for main-only logistics. In `joint` and `council` modes, include named role turns in the normal assistant reply, then record the visible turns with `interaction-turn --actor <role> --to <root|role|all>`. Summary/synthesis is a separate explicit step and must not replace role turns.
+
 ## Required Context
 
 Read these first:
@@ -111,6 +130,8 @@ The root control root normally starts on `master/main`. The run's materialized w
 
 - No accepted Architecture Brief, no Technical Contract or materialized execution worktree.
 - Interaction outputs are advisory until root records a decision; accepted Architect Intakes require an accepted root decision.
+- Root-facing `with`, `joint`, `council`, and role interactions are visible conversations first. Main must show the actual role turns to root in the normal assistant reply and record them with `interaction-turn`; synthesis/proposal is a later step and must not replace the visible exchange.
+- Every recorded interaction turn must have a clear speaker and audience. Use `interaction-turn --actor <role> --to <root|role|all>` so roles know whether they are answering root, another role, or the whole room.
 - Role briefs and interaction synthesis/proposals must include strongest objection, weakest assumption, and evidence that would change the recommendation.
 - No materialized execution worktree and gated Architect Execution Plan, no lane work.
 - Reviewer `ready` is code-review evidence only; architect `merge-ok` is required before integration.

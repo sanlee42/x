@@ -20,6 +20,7 @@ from x_state_discussion import (
     command_architect_intake,
     command_board,
     command_discussion_start,
+    command_discussion_show,
     command_discussion_synthesize,
     command_discussion_turn,
     command_role_list,
@@ -120,21 +121,35 @@ def build_parser() -> argparse.ArgumentParser:
     discussion_turn.add_argument("--discussion-id", dest="discussion_id")
     discussion_turn.add_argument("--interaction-id", dest="discussion_id")
     discussion_turn.add_argument("--actor", required=True)
+    discussion_turn.add_argument("--to")
     discussion_turn.add_argument("--turn-kind", required=True, choices=DISCUSSION_TURN_KINDS)
     discussion_turn.add_argument("--body")
     discussion_turn.add_argument("--body-file")
     discussion_turn.add_argument("--dry-run", action="store_true")
     discussion_turn.set_defaults(func=command_discussion_turn)
 
+    discussion_show = sub.add_parser("discussion-show", help="show the full interaction transcript with discussion-compatible naming")
+    discussion_show.add_argument("--discussion-id", dest="discussion_id")
+    discussion_show.add_argument("--interaction-id", dest="discussion_id")
+    discussion_show.add_argument("--full", action="store_true")
+    discussion_show.set_defaults(func=command_discussion_show)
+
     interaction_turn = sub.add_parser("interaction-turn", help="record one interaction turn")
     interaction_turn.add_argument("--interaction-id", dest="discussion_id")
     interaction_turn.add_argument("--discussion-id", dest="discussion_id")
     interaction_turn.add_argument("--actor", required=True)
+    interaction_turn.add_argument("--to")
     interaction_turn.add_argument("--turn-kind", required=True, choices=DISCUSSION_TURN_KINDS)
     interaction_turn.add_argument("--body")
     interaction_turn.add_argument("--body-file")
     interaction_turn.add_argument("--dry-run", action="store_true")
     interaction_turn.set_defaults(func=command_discussion_turn)
+
+    interaction_show = sub.add_parser("interaction-show", help="show the full interaction transcript")
+    interaction_show.add_argument("--interaction-id", dest="discussion_id")
+    interaction_show.add_argument("--discussion-id", dest="discussion_id")
+    interaction_show.add_argument("--full", action="store_true")
+    interaction_show.set_defaults(func=command_discussion_show)
 
     role_brief = sub.add_parser("role-brief", help="create a durable interaction role brief")
     role_brief.add_argument("--discussion-id", dest="discussion_id")

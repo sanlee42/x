@@ -38,6 +38,9 @@ def command_discussion_start(args: argparse.Namespace) -> None:
         agenda=args.agenda,
     )
     write(discussion_path, content, args.dry_run)
+    if not args.dry_run:
+        print()
+        print(render_discussion_transcript(discussion_path, content))
 
 
 def command_discussion_turn(args: argparse.Namespace) -> None:
@@ -46,6 +49,7 @@ def command_discussion_turn(args: argparse.Namespace) -> None:
     require_interaction_writable(discussion, "record turns")
     actor = normalized_interaction_actor(args.actor)
     validate_actor_for_discussion(discussion, actor)
+    target = normalized_turn_target(discussion, args.to, actor)
     body = optional_text_arg(args, "body", "")
     if not has_content(body):
         raise SystemExit("--body or --body-file is required")
@@ -53,6 +57,7 @@ def command_discussion_turn(args: argparse.Namespace) -> None:
     turn = "\n".join(
         [
             f"### {timestamp} {actor} / {args.turn_kind}",
+            f"To: {target}",
             "",
             body.strip(),
         ]
@@ -60,9 +65,46 @@ def command_discussion_turn(args: argparse.Namespace) -> None:
     text = discussion.read_text(encoding="utf-8")
     current = section_content(text, "Turns")
     text = replace_section(text, "Turns", turn if current in {"", "-", "Pending."} else current.rstrip() + "\n\n" + turn)
+    if header_value(text, "Status") == "synthesized":
+        text = replace_line(text, "Status: ", "active")
     text = replace_line(text, "Updated At: ", timestamp)
     text = append_event_text(text, f"discussion turn recorded: {actor}/{args.turn_kind}")
     save(discussion, text, args.dry_run)
+    if not args.dry_run:
+        print()
+        print(render_discussion_transcript(discussion, text))
+
+
+def command_discussion_show(args: argparse.Namespace) -> None:
+    root = repo_root(Path.cwd())
+    discussion = resolve_discussion(root, require_discussion_arg(args))
+    text = discussion.read_text(encoding="utf-8")
+    if args.full:
+        print(text, end="" if text.endswith("\n") else "\n")
+        return
+    print(render_discussion_transcript(discussion, text))
+
+
+def render_discussion_transcript(discussion: Path, text: str) -> str:
+    lines = [f"# x Interaction Transcript: {discussion.stem}"]
+    for line in text.splitlines():
+        if line.startswith(("Status:", "Mode:", "Created At:", "Updated At:", "Linked Run:", "Participants:")):
+            lines.append(line)
+    lines.extend(["", "## Room Roster", "", room_roster(text)])
+    for heading in ("Agenda", "Turns", "Role Briefs", "Synthesis", "Current Summary"):
+        content = section_content(text, heading)
+        lines.extend(["", f"## {heading}", "", content or "-"])
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def room_roster(text: str) -> str:
+    participants = [item.strip() for item in header_value(text, "Participants").split(",") if item.strip()]
+    lines = [
+        "- root: direction owner",
+        "- main: facilitator and recorder",
+    ]
+    lines.extend(f"- {participant}: active role view" for participant in participants)
+    return "\n".join(lines)
 
 
 def command_role_brief(args: argparse.Namespace) -> None:
@@ -399,6 +441,28 @@ def validate_actor_for_discussion(discussion: Path, actor: str) -> None:
     participants = {item.strip() for item in header_value(discussion.read_text(encoding="utf-8"), "Participants").split(",")}
     if actor not in participants:
         raise SystemExit(f"actor {actor} is not a participant in interaction {discussion.stem}")
+
+
+def normalized_turn_target(discussion: Path, raw_target: str | None, actor: str) -> str:
+    text = discussion.read_text(encoding="utf-8")
+    participants = [item.strip() for item in header_value(text, "Participants").split(",") if item.strip()]
+    if raw_target is None:
+        if header_value(text, "Mode") == "with":
+            return participants[0] if actor in {"root", "main"} and participants else "root"
+        return "all"
+    targets: list[str] = []
+    for item in raw_target.split(","):
+        target = normalized_interaction_actor(item.strip())
+        if not target:
+            continue
+        if target == "all" or target in {"root", "main"} or target in participants:
+            if target not in targets:
+                targets.append(target)
+            continue
+        raise SystemExit(f"target {item.strip()} is not a participant in interaction {discussion.stem}")
+    if not targets:
+        raise SystemExit("--to cannot be empty")
+    return ", ".join(targets)
 
 
 def require_challenge_fields(args: argparse.Namespace) -> None:

@@ -448,6 +448,18 @@ def command_councilor_package(root: Path, args: argparse.Namespace) -> None:
     intake = latest_accepted_intake_for_discussion(root, discussion.stem)
     payload = "\n".join(
         [
+            "Conversation Contract:",
+            "\n".join(
+                [
+                    f"- You are `{council_role}` in a `{header_value(text, 'Mode')}` root interaction.",
+                    f"- Participants: {header_value(text, 'Participants')}.",
+                    "- Reply as this role in the ongoing conversation; do not collapse the exchange into a neutral summary.",
+                    "- Name who you are answering and keep other participants visible when their views matter.",
+                    "- Provide a visible conversational turn first; formal role-brief fields may follow.",
+                    "- Do not close, synthesize, or exit the interaction unless root/main explicitly asks for that step.",
+                ]
+            ),
+            "",
             "Discussion:",
             text,
             "",
@@ -469,7 +481,8 @@ def command_councilor_package(root: Path, args: argparse.Namespace) -> None:
     )
     purpose = f"Produce a {council_role} role brief for the linked root interaction."
     expected_return = (
-        "Return stance/recommendation, rationale, objections or rejected options, risks, decisions needed, "
+        "Return `Visible Turn` first: a conversational reply from this role addressed to root and/or named participants. "
+        "Then return role-brief fields: stance/recommendation, rationale, objections or rejected options, risks, decisions needed, "
         "implications for architect, strongest objection, weakest assumption, and evidence that would change the recommendation. "
         "Do not create execution tasks, manage lanes, or bypass architect."
     )

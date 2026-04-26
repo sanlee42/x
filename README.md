@@ -100,6 +100,16 @@ Interaction modes are `with`, `joint`, and `independent`. Participants come from
 
 Role briefs and summaries must include challenger fields: strongest objection, weakest assumption, and evidence that would change the recommendation. Interaction state is advisory until root records a decision; the accepted Architect Intake must link that accepted decision and is then handed to the existing architect room.
 
+Joint/council interactions are visible conversations first. Main should show root each role's actual turn in the normal response, and record it with speaker and audience metadata:
+
+```bash
+python ~/.codex/skills/x/scripts/x_state.py interaction-turn --interaction-id <interaction-id> --actor product --to all --turn-kind viewpoint --body "<visible turn>"
+```
+
+Recording a turn prints the current transcript immediately, so root can see the discussion process without running a separate show command. `interaction-show` and `discussion-show` are available for resume/debug reads only.
+
+After an interaction starts, follow-up natural language stays in that room until root asks to synthesize, decide, close, supersede, or switch rooms. Assistant responses should keep identity labels visible, for example `product -> root:`, `technical -> product/all:`, and `main -> root:` for facilitator notes. The transcript renderer also prints a room roster so root can see who is still present.
+
 `$x architect` can start without a goal. It opens an architect room for root/architect co-creation. After the Architecture Brief is accepted, materialize an integration worktree:
 
 ```bash

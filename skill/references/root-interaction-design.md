@@ -12,6 +12,10 @@ root interaction -> optional role briefs -> interaction summary/proposal -> root
 
 The design keeps `x` generic. Product-specific policy still belongs in the target repository's `PROJECT_CONSTRAINTS.md`, `AGENTS.md`, and `.x/project/profile.md`.
 
+Interactions are visible conversations first. In `with`, `joint`, and `council` flows, main must show root the actual role turns as the normal assistant response and must record those turns with speaker and audience metadata. A synthesis/proposal is a later artifact; it must not replace the conversation transcript.
+
+An active interaction is a room, not a one-shot answer. After root starts a room, main keeps routing follow-up natural language into that same room until root explicitly asks to synthesize, decide, close, supersede, or switch rooms. Main may add facilitator notes, but it must not silently collapse back into unlabeled main-agent conversation.
+
 ## Intent
 
 Root-facing interaction preserves why a direction was chosen, what tradeoffs were rejected, which assumptions were challenged, what root decided, and what the architect may use as decision-complete input. It must not turn root into the manager of engineer and reviewer sessions.
@@ -63,6 +67,8 @@ Use `interaction-start --mode joint` when root and several roles should share on
 
 ```bash
 python ~/.codex/skills/x/scripts/x_state.py interaction-start --mode joint --title "Direction alignment" --agenda "Align product and technical direction" --participants strategy technical product
+python ~/.codex/skills/x/scripts/x_state.py interaction-turn --interaction-id "<interaction-id>" --actor root --to all --turn-kind statement --body "<root thesis>"
+python ~/.codex/skills/x/scripts/x_state.py interaction-turn --interaction-id "<interaction-id>" --actor product --to all --turn-kind viewpoint --body "<product turn>"
 ```
 
 Use `interaction-start --mode independent` when root needs unpolluted first-pass role views:
@@ -89,6 +95,18 @@ boards/current.md
 ```
 
 Existing `decisions/<decision-id>.md` remains the source of root authority.
+
+The interaction file's `Turns` section is the canonical transcript. Each turn includes an actor, turn kind, audience (`To:`), and body. Recording a turn prints the current transcript so root can see the process without running a separate show command. `interaction-show` / `discussion-show` exist for resume/debug reads, not as a required user step.
+
+The transcript renderer includes a room roster:
+
+```text
+root: direction owner
+main: facilitator and recorder
+<role>: active role view
+```
+
+Root-facing assistant responses should mirror this shape with labeled lines such as `product -> root:` or `technical -> product/all:`. This prevents the user from losing track of who is speaking.
 
 Precedence:
 
