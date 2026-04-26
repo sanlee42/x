@@ -244,6 +244,49 @@ class XStateDirectiveTests(XStateTestCase):
         )
         self.x("close", "--run-id", "run-root-decision", "--summary", "ready")
 
+    def test_observation_directives_are_open_but_non_blocking(self) -> None:
+        self.prepare_materialized_run("run-observation", "observation")
+        directives = [
+            ("parallelism", "parallelism-adjustment", "run", None),
+            ("verification", "verification-adjustment", "plan", None),
+            ("evidence", "request-more-evidence", "lane", "lane-llm"),
+        ]
+        for directive_id, action, target, lane_id in directives:
+            args = [
+                "architect-directive",
+                "--run-id",
+                "run-observation",
+                "--directive-id",
+                directive_id,
+                "--title",
+                f"{action} directive",
+                "--target",
+                target,
+                "--action",
+                action,
+                "--summary",
+                "Observation adjustment.",
+                "--instructions",
+                "Record the observation and keep work moving.",
+                "--acceptance",
+                "Observation is visible in the control board.",
+            ]
+            if lane_id:
+                args.extend(["--lane-id", lane_id])
+            self.x(*args)
+            directive_text = (self.x_home / f"projects/repo/directives/{directive_id}.md").read_text(encoding="utf-8")
+            self.assertIn("Status: open", directive_text)
+            self.assertIn("Blocking: no", directive_text)
+
+        self.x("attempt-start", "--task-id", "task-llm", "--kind", "implementation", "--title", "Implement marker")
+        self.x("package", "--role", "engineer", "--run-id", "run-observation", "--task-id", "task-llm", "--attempt-id", "task-llm-a1")
+        (self.lane_worktree("observation") / "README.md").write_text("# repo\n\nllm marker\n", encoding="utf-8")
+        self.x("attempt-result", "--attempt-id", "task-llm-a1", "--changed-files", "README.md", "--summary", "Added marker.", "--verification", "Inspected README.", "--residual-risk", "None.")
+        self.x("package", "--role", "reviewer", "--run-id", "run-observation", "--task-id", "task-llm", "--attempt-id", "task-llm-a1")
+        self.x("review", "--run-id", "run-observation", "--attempt-id", "task-llm-a1", "--title", "Ready review", "--summary", "Ready.", "--recommendation", "ready", "--reviewed-diff", "README diff reviewed.", "--verification", "Verification sufficient.")
+        self.approve_integrate_and_mark_green("run-observation", "task-llm-a1")
+        self.x("gate", "--mode", "merge-ready", "--run-id", "run-observation")
+
     def test_architect_package_contains_control_board_and_directives(self) -> None:
         self.prepare_materialized_run("run-board", "board")
         self.pause_lane("run-board", "pause-board")

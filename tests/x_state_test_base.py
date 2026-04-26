@@ -235,13 +235,7 @@ class XStateTestCase(unittest.TestCase):
         parallel_lanes: str | None = None,
         integration_order: str | None = None,
     ) -> None:
-        lanes = parallel_lanes or "\n".join(
-            [
-                "| Lane ID | Task ID | Allowed Scope | Forbidden Scope | Worktree Scope | Verification | Done Evidence |",
-                "| --- | --- | --- | --- | --- | --- | --- |",
-                f"| {lane_id} | {task_id} | README.md | Everything else. | {lane_id} | Inspect README after the lane patch. | README marker changed. |",
-            ]
-        )
+        lanes = parallel_lanes or self.execution_plan_lane_table(lane_id=lane_id, task_id=task_id)
         self.x(
             "execution-plan",
             "--run-id",
@@ -284,6 +278,24 @@ class XStateTestCase(unittest.TestCase):
             final_verification_status,
         )
 
+    def execution_plan_lane_table(
+        self,
+        *,
+        lane_id: str = "lane-llm",
+        task_id: str = "task-llm",
+        risk_level: str = "standard",
+        concurrent_group: str = "none",
+        serial_only: str = "no",
+        shared_files: str = "none",
+    ) -> str:
+        return "\n".join(
+            [
+                "| Lane ID | Task ID | Allowed Scope | Forbidden Scope | Worktree Scope | Verification | Done Evidence | Risk Level | Concurrent Group | Serial Only | Shared Files |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                f"| {lane_id} | {task_id} | README.md | Everything else. | {lane_id} | Inspect README after the lane patch. | README marker changed. | {risk_level} | {concurrent_group} | {serial_only} | {shared_files} |",
+            ]
+        )
+
     def create_execution_plan_and_lane(self, run_id: str, scope: str, lane_id: str = "lane-llm") -> None:
         self.create_execution_plan(run_id, lane_id=lane_id)
         self.x("architect-gate", "--run-id", run_id)
@@ -298,6 +310,30 @@ class XStateTestCase(unittest.TestCase):
         review_id: str = "architect-llm",
         plan_id: str = "plan-llm",
         mark_green: bool = True,
+    ) -> None:
+        self.record_architect_merge_ok(run_id, attempt_id, lane_id=lane_id, review_id=review_id)
+        self.x("integrate", "--run-id", run_id, "--lane-id", lane_id)
+        if not mark_green:
+            return
+        self.x(
+            "execution-plan",
+            "--run-id",
+            run_id,
+            "--plan-id",
+            plan_id,
+            "--final-verification-status",
+            "green",
+            "--final-verification",
+            "Final verification command: inspect integrated README. Result: expected marker present.",
+        )
+
+    def record_architect_merge_ok(
+        self,
+        run_id: str,
+        attempt_id: str,
+        *,
+        lane_id: str = "lane-llm",
+        review_id: str = "architect-llm",
     ) -> None:
         self.x(
             "architect-review",
@@ -321,18 +357,4 @@ class XStateTestCase(unittest.TestCase):
             "Reviewed lane evidence.",
             "--integration-risk",
             "No conflict expected.",
-        )
-        self.x("integrate", "--run-id", run_id, "--lane-id", lane_id)
-        if not mark_green:
-            return
-        self.x(
-            "execution-plan",
-            "--run-id",
-            run_id,
-            "--plan-id",
-            plan_id,
-            "--final-verification-status",
-            "green",
-            "--final-verification",
-            "Final verification command: inspect integrated README. Result: expected marker present.",
         )

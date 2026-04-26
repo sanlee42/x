@@ -93,10 +93,10 @@ class XStateWorkflowTests(XStateTestCase):
 
         bad_lanes = "\n".join(
             [
-                "| Lane ID | Task ID | Allowed Scope | Forbidden Scope | Worktree Scope | Verification | Done Evidence |",
-                "| --- | --- | --- | --- | --- | --- | --- |",
-                "| lane-readme | task-llm |  | Everything else. | lane-readme | Inspect README. | README marker changed. |",
-                "| lane-docs | task-docs | README.md | Everything else. | lane-docs | Inspect README. | README marker changed. |",
+                "| Lane ID | Task ID | Allowed Scope | Forbidden Scope | Worktree Scope | Verification | Done Evidence | Risk Level | Concurrent Group | Serial Only | Shared Files |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                "| lane-readme | task-llm |  | Everything else. | lane-readme | Inspect README. | README marker changed. | standard | none | no | none |",
+                "| lane-docs | task-docs | README.md | Everything else. | lane-docs | Inspect README. | README marker changed. | standard | none | no | none |",
             ]
         )
         self.create_execution_plan(
@@ -139,6 +139,44 @@ class XStateWorkflowTests(XStateTestCase):
         status = self.x("lane-status", "--run-id", "run-gate")
         self.assertIn("lane-readme; status=active", status.stdout)
         self.assertIn("lane-docs; status=active", status.stdout)
+
+    def test_architect_gate_validates_lane_parallelism_schema(self) -> None:
+        self.x("start", "--run-id", "run-lane-schema", "--goal", "Schema")
+        self.accept_brief("run-lane-schema")
+        self.create_contract_and_task("run-lane-schema")
+        self.x("materialize", "--run-id", "run-lane-schema", "--scope", "lane-schema")
+
+        missing_columns = "\n".join(
+            [
+                "| Lane ID | Task ID | Allowed Scope | Forbidden Scope | Worktree Scope | Verification | Done Evidence |",
+                "| --- | --- | --- | --- | --- | --- | --- |",
+                "| lane-llm | task-llm | README.md | Everything else. | lane-llm | Inspect README. | README marker changed. |",
+            ]
+        )
+        self.create_execution_plan("run-lane-schema", plan_id="plan-missing-risk", parallel_lanes=missing_columns)
+        failed = self.x("architect-gate", "--run-id", "run-lane-schema", check=False)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn("Parallel Lanes missing column risk level", failed.stderr + failed.stdout)
+
+        invalid_values = self.execution_plan_lane_table(risk_level="critical", serial_only="maybe")
+        self.create_execution_plan("run-lane-schema", plan_id="plan-invalid-values", parallel_lanes=invalid_values)
+        failed = self.x("architect-gate", "--run-id", "run-lane-schema", check=False)
+        self.assertNotEqual(failed.returncode, 0)
+        output = failed.stderr + failed.stdout
+        self.assertIn("lane lane-llm risk level must be standard or high", output)
+        self.assertIn("lane lane-llm serial only must be yes or no", output)
+
+        serial_with_group = self.execution_plan_lane_table(concurrent_group="group-a", serial_only="yes")
+        self.create_execution_plan("run-lane-schema", plan_id="plan-serial-group", parallel_lanes=serial_with_group)
+        failed = self.x("architect-gate", "--run-id", "run-lane-schema", check=False)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn("serial only yes cannot have concurrent group group-a", failed.stderr + failed.stdout)
+
+        shared_standard = self.execution_plan_lane_table(shared_files="README.md")
+        self.create_execution_plan("run-lane-schema", plan_id="plan-shared-standard", parallel_lanes=shared_standard)
+        failed = self.x("architect-gate", "--run-id", "run-lane-schema", check=False)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn("shared files require risk level high", failed.stderr + failed.stdout)
 
     def test_same_lane_id_can_be_reused_across_runs(self) -> None:
         self.prepare_materialized_run("run-one", "one")
@@ -321,6 +359,63 @@ class XStateWorkflowTests(XStateTestCase):
         self.x("start", "--run-id", "run-other", "--goal", "Other")
         resume = self.x("resume", cwd=self.repo / ".dev/llm")
         self.assertIn("# x Run: run-llm", resume.stdout)
+
+    def test_high_risk_lane_requires_two_merge_ok_reviews_for_latest_attempt(self) -> None:
+        self.x("start", "--run-id", "run-high-risk", "--goal", "High risk")
+        self.accept_brief("run-high-risk")
+        self.create_contract_and_task("run-high-risk")
+        self.x("materialize", "--run-id", "run-high-risk", "--scope", "high-risk")
+        self.create_execution_plan(
+            "run-high-risk",
+            parallel_lanes=self.execution_plan_lane_table(risk_level="high", shared_files="README.md"),
+        )
+        self.x("architect-gate", "--run-id", "run-high-risk")
+        self.x("lane-start", "--run-id", "run-high-risk", "--lane-id", "lane-llm", "--task-id", "task-llm")
+        status = self.x("lane-status", "--run-id", "run-high-risk")
+        self.assertIn("risk=high", status.stdout)
+        self.assertIn("shared=README.md", status.stdout)
+        lane_text = self.lane_file("run-high-risk").read_text(encoding="utf-8")
+        self.lane_file("run-high-risk").write_text(lane_text.replace("Risk Level: high", "Risk Level: standard"), encoding="utf-8")
+
+        self.x("attempt-start", "--task-id", "task-llm", "--kind", "implementation", "--attempt-id", "task-llm-a1", "--title", "First marker")
+        self.x("package", "--role", "engineer", "--run-id", "run-high-risk", "--task-id", "task-llm", "--attempt-id", "task-llm-a1")
+        (self.lane_worktree("high-risk") / "README.md").write_text("# repo\n\nfirst marker\n", encoding="utf-8")
+        self.x("attempt-result", "--attempt-id", "task-llm-a1", "--changed-files", "README.md", "--summary", "Added first marker.", "--verification", "Inspected README.", "--residual-risk", "None.")
+        self.x("package", "--role", "reviewer", "--run-id", "run-high-risk", "--task-id", "task-llm", "--attempt-id", "task-llm-a1")
+        self.x("review", "--run-id", "run-high-risk", "--attempt-id", "task-llm-a1", "--review-id", "review-high-a1", "--title", "Ready review", "--summary", "Ready.", "--recommendation", "ready", "--reviewed-diff", "README diff reviewed.", "--verification", "Verification sufficient.")
+        self.record_architect_merge_ok("run-high-risk", "task-llm-a1", review_id="arch-high-a1-first")
+        self.record_architect_merge_ok("run-high-risk", "task-llm-a1", review_id="arch-high-a1-second")
+
+        self.x("architect-review", "--run-id", "run-high-risk", "--lane-id", "lane-llm", "--attempt-id", "task-llm-a1", "--review-id", "arch-high-fix-source", "--title", "Needs architect fix", "--summary", "Latest attempt needs a fix.", "--recommendation", "changes-requested", "--criteria", "Needs updated marker.", "--verification", "Reviewed lane evidence.", "--integration-risk", "Fix before integration.", "--blocking-findings", "- Marker must be updated.")
+        self.x("attempt-start", "--task-id", "task-llm", "--kind", "fix", "--source-architect-review-id", "arch-high-fix-source", "--attempt-id", "task-llm-a2", "--title", "Fix marker")
+        self.x("package", "--role", "engineer", "--run-id", "run-high-risk", "--task-id", "task-llm", "--attempt-id", "task-llm-a2")
+        (self.lane_worktree("high-risk") / "README.md").write_text("# repo\n\nsecond marker\n", encoding="utf-8")
+        self.x("attempt-result", "--attempt-id", "task-llm-a2", "--changed-files", "README.md", "--summary", "Added second marker.", "--verification", "Inspected README.", "--residual-risk", "None.")
+        self.x("package", "--role", "reviewer", "--run-id", "run-high-risk", "--task-id", "task-llm", "--attempt-id", "task-llm-a2")
+        self.x("review", "--run-id", "run-high-risk", "--attempt-id", "task-llm-a2", "--review-id", "review-high-a2", "--title", "Ready review", "--summary", "Ready.", "--recommendation", "ready", "--reviewed-diff", "README diff reviewed.", "--verification", "Verification sufficient.")
+        self.record_architect_merge_ok("run-high-risk", "task-llm-a2", review_id="arch-high-a2-first")
+
+        failed = self.x("integrate", "--run-id", "run-high-risk", "--lane-id", "lane-llm", check=False)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn("high-risk lane requires a second architect review pass for latest attempt (found 1 merge-ok review record)", failed.stderr + failed.stdout)
+        gate = self.x("gate", "--mode", "merge-ready", "--run-id", "run-high-risk", check=False)
+        self.assertNotEqual(gate.returncode, 0)
+        self.assertIn("high-risk lane requires a second architect review pass for latest attempt", gate.stderr + gate.stdout)
+
+        self.record_architect_merge_ok("run-high-risk", "task-llm-a2", review_id="arch-high-a2-second")
+        self.x("integrate", "--run-id", "run-high-risk", "--lane-id", "lane-llm")
+        self.x(
+            "execution-plan",
+            "--run-id",
+            "run-high-risk",
+            "--plan-id",
+            "plan-llm",
+            "--final-verification-status",
+            "green",
+            "--final-verification",
+            "Final verification command: inspect integrated README. Result: expected marker present.",
+        )
+        self.x("gate", "--mode", "merge-ready", "--run-id", "run-high-risk")
 
     def test_full_fix_loop_clears_unresolved_review_and_passes_gate(self) -> None:
         self.prepare_materialized_run("run-fix", "fix")

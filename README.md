@@ -101,7 +101,7 @@ python ~/.codex/skills/x/scripts/x_state.py execution-plan --run-id <run-id> ...
 python ~/.codex/skills/x/scripts/x_state.py architect-gate --run-id <run-id>
 ```
 
-The plan must define parallel lanes, task dependencies, lane ownership, exact allowed/forbidden scope, expected artifacts, verification matrix, reviewer criteria, architect merge criteria, integration order, concurrent lane groups, serial-only lanes, shared-file conflict risks, loopbacks, blocked-state recovery, and root-decision boundaries. Any unresolved `TBD`, `figure out`, `use best judgment`, or `decide later` language fails the readiness gate unless it is explicitly a root decision.
+The plan must define parallel lanes, task dependencies, lane ownership, exact allowed/forbidden scope, expected artifacts, verification matrix, reviewer criteria, architect merge criteria, integration order, concurrent lane groups, serial-only lanes, shared-file conflict risks, loopbacks, blocked-state recovery, and root-decision boundaries. The `Parallel Lanes` table must include `Lane ID`, `Task ID`, `Allowed Scope`, `Forbidden Scope`, `Worktree Scope`, `Verification`, `Done Evidence`, `Risk Level`, `Concurrent Group`, `Serial Only`, and `Shared Files`. `Risk Level` is `standard` or `high`; `Serial Only` is `yes` or `no`; `Concurrent Group` is a group name or `none`; `Shared Files` is a file/module list or `none`. Shared files require `Risk Level` `high`, and serial-only lanes must use `Concurrent Group` `none`. Any unresolved `TBD`, `figure out`, `use best judgment`, or `decide later` language fails the readiness gate unless it is explicitly a root decision.
 
 After the readiness gate passes, `$x` defaults to aggressive safe parallelism: main should batch-start every dependency-satisfied, unpaused, unblocked, non-conflicting ready lane and start reviewers as soon as attempt evidence exists. There is no fixed default engineer/reviewer cap unless root or project instructions set one. Integration still stays serial according to the plan's integration order.
 
@@ -141,7 +141,7 @@ python ~/.codex/skills/x/scripts/x_state.py execution-plan --run-id <run-id> --p
 python ~/.codex/skills/x/scripts/x_state.py gate --mode merge-ready --run-id <run-id>
 ```
 
-High-risk lanes, including shared infrastructure, cross-lane contracts, data migrations, auth/security/privacy, public APIs, performance-sensitive paths, or files modified by more than one lane, require a second architect review pass before integration.
+High-risk lanes, including shared infrastructure, cross-lane contracts, data migrations, auth/security/privacy, public APIs, performance-sensitive paths, or files modified by more than one lane, must be marked `Risk Level` `high`. They require two distinct architect review records with `merge-ok`, and both records must link the latest lane attempt before `integrate` or `gate --mode merge-ready` can pass.
 
 The merge-ready gate requires all planned lanes to be started, reviewer-ready, architect `merge-ok`, integrated, and covered by green final verification status plus recorded final verification evidence, with no unresolved blocking reviews or risks.
 
@@ -151,7 +151,7 @@ During execution, root should keep discussion at the architect layer. When the a
 python ~/.codex/skills/x/scripts/x_state.py architect-directive --run-id <run-id> --title "<title>" --target lane --lane-id <lane-id> --action pause-lane --summary "<why>" --instructions "<what main should do>" --acceptance "<how this clears>"
 ```
 
-Directive actions are `continue`, `pause-lane`, `resume-lane`, `replan`, and `root-decision`. Open `pause-lane` and `replan` directives block lower lane work; open `root-decision` directives block accepted close. Architect packages include a control board with run, plan, lane, review, lane heartbeat, attention, and open directive state.
+Directive actions are `continue`, `parallelism-adjustment`, `verification-adjustment`, `pause-lane`, `resume-lane`, `replan`, `root-decision`, and `request-more-evidence`. `parallelism-adjustment`, `verification-adjustment`, and `request-more-evidence` default to open, non-blocking directives. Open `pause-lane` and `replan` directives block lower lane work; open `root-decision` directives block accepted close. Architect packages include a control board with run, plan, lane, review, lane heartbeat, attention, and open directive state.
 
 Architect should also observe execution before final review. Main should generate architect observation packages when heartbeats are stale or blocked, safe parallelism is underused, lane activity suggests scope drift, multiple lanes touch shared files or interfaces, verification/product acceptance evidence is weak, repeated fix loops suggest plan mismatch, quota/context risk appears, or a large integration batch is about to proceed. Architect responds with continue, parallelism or verification adjustments, directives, replan/root-decision, or requests for more evidence.
 

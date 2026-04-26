@@ -73,7 +73,7 @@ Interaction role views must not create Engineer Tasks, start attempts, manage la
    python ~/.codex/skills/x/scripts/x_state.py execution-plan --run-id "<run-id>" --title "<plan>" --objective "<objective>" --parallel-lanes "<lane table>" --dependency-graph "<graph>" --lane-ownership "<ownership>" --allowed-scope "<scope>" --forbidden-scope "<scope>" --expected-artifacts "<artifacts>" --verification-matrix "<matrix>" --reviewer-criteria "<criteria>" --architect-merge-criteria "<criteria>" --integration-order "<order>" --known-risks "<risks>" --loopback-triggers "<triggers>" --blocked-recovery "<recovery>" --root-decisions "<root decisions>"
    python ~/.codex/skills/x/scripts/x_state.py architect-gate --run-id "<run-id>"
    ```
-   The plan must be decision-complete for every lane. It must include exact lane/task scope, verification, done evidence, runbook, loop policy, review criteria, architect merge criteria, integration order, concurrent lane groups, serial-only lanes, shared-file conflict risks, blocked-state recovery, and root escalation boundaries. Unresolved `TBD`, `figure out`, `use best judgment`, or `decide later` language fails the readiness gate unless explicitly recorded as a root decision.
+   The plan must be decision-complete for every lane. Its `Parallel Lanes` table must include `Lane ID`, `Task ID`, `Allowed Scope`, `Forbidden Scope`, `Worktree Scope`, `Verification`, `Done Evidence`, `Risk Level`, `Concurrent Group`, `Serial Only`, and `Shared Files`. `Risk Level` is `standard` or `high`; `Serial Only` is `yes` or `no`; `Concurrent Group` is a group name or `none`; `Shared Files` is a file/module list or `none`. Shared files require `Risk Level` `high`, and serial-only lanes must use `Concurrent Group` `none`. It must include exact lane/task scope, verification, done evidence, runbook, loop policy, review criteria, architect merge criteria, integration order, concurrent lane groups, serial-only lanes, shared-file conflict risks, blocked-state recovery, and root escalation boundaries. Unresolved `TBD`, `figure out`, `use best judgment`, or `decide later` language fails the readiness gate unless explicitly recorded as a root decision.
 10. Start lane sessions/worktrees from the gated plan:
     ```bash
     python ~/.codex/skills/x/scripts/x_state.py lane-start --run-id "<run-id>" --lane-id "<lane-id>" --task-id "<task-id>"
@@ -112,12 +112,12 @@ Interaction role views must not create Engineer Tasks, start attempts, manage la
     ```bash
     python ~/.codex/skills/x/scripts/x_state.py architect-review --lane-id "<lane-id>" --attempt-id "<attempt-id>" --title "<architect review>" --summary "<summary>" --recommendation merge-ok --criteria "<criteria>" --verification "<assessment>" --integration-risk "<risk>"
     ```
-    Read `references/architect-review-policy.md` before architect review.
+    Read `references/architect-review-policy.md` before architect review. High-risk lanes require two distinct `merge-ok` architect review records linked to the latest attempt before integration.
 19. If architect needs to adjust execution before integration review, record an explicit directive:
    ```bash
    python ~/.codex/skills/x/scripts/x_state.py architect-directive --run-id "<run-id>" --title "<directive>" --target lane --lane-id "<lane-id>" --action pause-lane --summary "<why>" --instructions "<what main should do>" --acceptance "<clear condition>"
    ```
-   Valid actions are `continue`, `pause-lane`, `resume-lane`, `replan`, and `root-decision`.
+   Valid actions are `continue`, `parallelism-adjustment`, `verification-adjustment`, `pause-lane`, `resume-lane`, `replan`, `root-decision`, and `request-more-evidence`. `parallelism-adjustment`, `verification-adjustment`, and `request-more-evidence` are open but non-blocking by default; use `pause-lane`, `replan`, or `root-decision` when execution must be gated.
 20. Integrate only after reviewer ready and architect `merge-ok`:
     ```bash
     python ~/.codex/skills/x/scripts/x_state.py integrate --lane-id "<lane-id>"

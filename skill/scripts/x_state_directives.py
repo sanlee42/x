@@ -267,6 +267,10 @@ def merge_ready_directive_failures(root: Path, run_id: str) -> list[str]:
 
 
 def directive_next_action(action: str, lane_id: str) -> str:
+    if action == "parallelism-adjustment":
+        return "Adjust lane scheduling according to the architect directive."
+    if action == "verification-adjustment":
+        return "Update lane or final verification according to the architect directive."
     if action == "pause-lane":
         return f"Keep lane {lane_id} paused until architect issues resume-lane or replan."
     if action == "resume-lane":
@@ -275,4 +279,6 @@ def directive_next_action(action: str, lane_id: str) -> str:
         return "Produce a revised Architect Execution Plan and rerun architect readiness gate."
     if action == "root-decision":
         return "Root must resolve the architect decision before accepted close."
+    if action == "request-more-evidence":
+        return "Collect the requested evidence and continue once it is recorded."
     return "Continue from the architect directive."

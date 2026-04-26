@@ -477,7 +477,16 @@ def build_parser() -> argparse.ArgumentParser:
     architect_directive.add_argument(
         "--action",
         required=True,
-        choices=["continue", "pause-lane", "resume-lane", "replan", "root-decision"],
+        choices=[
+            "continue",
+            "parallelism-adjustment",
+            "verification-adjustment",
+            "pause-lane",
+            "resume-lane",
+            "replan",
+            "root-decision",
+            "request-more-evidence",
+        ],
     )
     architect_directive.add_argument("--summary", required=True)
     architect_directive.add_argument("--instructions", required=True)

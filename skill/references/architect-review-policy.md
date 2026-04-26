@@ -22,4 +22,6 @@ Reviewer `ready` is not integration approval. Architect review must evaluate the
 - `blocked`: evidence is missing or dependency is unresolved
 - `replan`: implementation reveals that the execution plan or contract is wrong
 
-High-risk lanes require a second architect review pass before integration. High risk includes shared infrastructure, cross-lane contracts, data migrations, auth/security/privacy, public APIs, performance-sensitive paths, or files modified by more than one lane.
+High-risk lanes are declared by `Risk Level` `high` in the gated execution plan. High risk includes shared infrastructure, cross-lane contracts, data migrations, auth/security/privacy, public APIs, performance-sensitive paths, or files modified by more than one lane.
+
+High-risk integration requires two distinct architect review records with `Recommendation: merge-ok`, and both records must link the latest lane attempt. Older merge-ok reviews do not count after a fix attempt starts. Standard lanes require one latest-attempt `merge-ok` architect review.

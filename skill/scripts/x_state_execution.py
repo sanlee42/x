@@ -27,7 +27,21 @@ PLAN_REQUIRED_SECTIONS = (
     "Blocked-State Recovery",
     "Root Decisions Needed",
 )
-LANE_TABLE_COLUMNS = ("lane-id", "task-id", "allowed-scope", "forbidden-scope", "worktree-scope", "verification", "done-evidence")
+LANE_TABLE_COLUMNS = (
+    "lane-id",
+    "task-id",
+    "allowed-scope",
+    "forbidden-scope",
+    "worktree-scope",
+    "verification",
+    "done-evidence",
+    "risk-level",
+    "concurrent-group",
+    "serial-only",
+    "shared-files",
+)
+VALID_LANE_RISK_LEVELS = {"standard", "high"}
+VALID_LANE_SERIAL_ONLY = {"yes", "no"}
 LANE_ACTIVE_STATUSES = {"active", "code-changes-requested", "architect-changes-requested"}
 HEARTBEAT_STALE_MINUTES = 60
 
@@ -184,15 +198,19 @@ def architect_gate_failures(root: Path, run: Path, plan: Path | None) -> list[st
         if not has_content(content):
             failures.append(f"{plan.stem}: missing {section}")
     failures.extend(deferred_decision_failures(text, plan.stem))
+    header_failures = lane_table_header_failures(text, plan.stem)
+    failures.extend(header_failures)
     lanes = parse_plan_lanes(text)
     if not lanes:
-        failures.append(f"{plan.stem}: Parallel Lanes must include a markdown table with lane/task/scope/verification columns")
+        if not header_failures:
+            failures.append(f"{plan.stem}: Parallel Lanes must include a markdown table with lane/task/scope/risk/parallelism/verification columns")
     integration_order = section_content(text, "Integration Order")
     for lane in lanes:
         lane_id = lane["lane-id"]
         for column in LANE_TABLE_COLUMNS:
             if not has_content(lane.get(column, "")):
                 failures.append(f"{plan.stem}: lane {lane_id} missing {column.replace('-', ' ')}")
+        failures.extend(lane_schema_failures(plan.stem, lane))
         task_id = lane.get("task-id", "")
         try:
             task = resolve_state_file(root, "tasks", task_id)
@@ -233,16 +251,7 @@ def deferred_decision_failures(text: str, plan_id: str) -> list[str]:
 
 
 def parse_plan_lanes(plan_text: str) -> list[dict[str, str]]:
-    section = section_content(plan_text, "Parallel Lanes")
-    rows = []
-    for line in section.splitlines():
-        stripped = line.strip()
-        if not stripped.startswith("|") or not stripped.endswith("|"):
-            continue
-        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
-        if all(re.fullmatch(r":?-{3,}:?", cell.replace(" ", "")) for cell in cells):
-            continue
-        rows.append(cells)
+    rows = lane_table_rows(plan_text)
     if len(rows) < 2:
         return []
     headers = [normalize_table_header(cell) for cell in rows[0]]
@@ -257,6 +266,54 @@ def parse_plan_lanes(plan_text: str) -> list[dict[str, str]]:
         if item.get("lane-id"):
             lanes.append(item)
     return lanes
+
+
+def lane_table_rows(plan_text: str) -> list[list[str]]:
+    section = section_content(plan_text, "Parallel Lanes")
+    rows = []
+    for line in section.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|") or not stripped.endswith("|"):
+            continue
+        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        if all(re.fullmatch(r":?-{3,}:?", cell.replace(" ", "")) for cell in cells):
+            continue
+        rows.append(cells)
+    return rows
+
+
+def lane_table_header_failures(plan_text: str, plan_id: str) -> list[str]:
+    rows = lane_table_rows(plan_text)
+    if not rows:
+        return []
+    headers = [normalize_table_header(cell) for cell in rows[0]]
+    return [
+        f"{plan_id}: Parallel Lanes missing column {column.replace('-', ' ')}"
+        for column in LANE_TABLE_COLUMNS
+        if column not in headers
+    ]
+
+
+def lane_schema_failures(plan_id: str, lane: dict[str, str]) -> list[str]:
+    lane_id = lane.get("lane-id", "unknown")
+    risk_level = normalized_lane_choice(lane.get("risk-level", ""))
+    concurrent_group = normalized_lane_choice(lane.get("concurrent-group", ""))
+    serial_only = normalized_lane_choice(lane.get("serial-only", ""))
+    shared_files = normalized_lane_choice(lane.get("shared-files", ""))
+    failures = []
+    if risk_level and risk_level not in VALID_LANE_RISK_LEVELS:
+        failures.append(f"{plan_id}: lane {lane_id} risk level must be standard or high")
+    if serial_only and serial_only not in VALID_LANE_SERIAL_ONLY:
+        failures.append(f"{plan_id}: lane {lane_id} serial only must be yes or no")
+    if serial_only == "yes" and concurrent_group and concurrent_group != "none":
+        failures.append(f"{plan_id}: lane {lane_id} serial only yes cannot have concurrent group {lane.get('concurrent-group', '')}")
+    if shared_files and shared_files != "none" and risk_level and risk_level != "high":
+        failures.append(f"{plan_id}: lane {lane_id} shared files require risk level high")
+    return failures
+
+
+def normalized_lane_choice(value: str) -> str:
+    return " ".join(value.strip().split()).lower()
 
 
 def normalize_table_header(value: str) -> str:
@@ -379,6 +436,10 @@ def command_lane_start(args: argparse.Namespace) -> None:
         forbidden_scope=lane_row["forbidden-scope"],
         verification=lane_row["verification"],
         done_evidence=lane_row["done-evidence"],
+        risk_level=normalized_lane_choice(lane_row["risk-level"]),
+        concurrent_group=normalized_lane_choice(lane_row["concurrent-group"]),
+        serial_only=normalized_lane_choice(lane_row["serial-only"]),
+        shared_files=lane_row["shared-files"].strip(),
         runbook=section_content(plan_text, "Lane Session Ownership"),
         loop_policy=section_content(plan_text, "Loopback Triggers"),
         expected_artifacts=section_content(plan_text, "Expected Artifacts"),
@@ -476,6 +537,10 @@ def lane_status_summary(lane: Path) -> str:
         lane_display_id(lane),
         f"status={header_value(text, 'Status') or 'unknown'}",
         f"task={header_value(text, 'Linked Task') or 'unknown'}",
+        f"risk={compact_state_value(header_value(text, 'Risk Level'))}",
+        f"group={compact_state_value(header_value(text, 'Concurrent Group'))}",
+        f"serial={compact_state_value(header_value(text, 'Serial Only'))}",
+        f"shared={compact_state_value(header_value(text, 'Shared Files'))}",
         f"attempt={header_value(text, 'Last Attempt') or 'none'}",
         f"code-review={header_value(text, 'Code Review') or 'none'}",
         f"architect-review={header_value(text, 'Architect Review') or 'none'}",
@@ -505,6 +570,10 @@ def lane_heartbeats_summary(root: Path, run: Path) -> str:
                 [
                     lane_display_id(lane),
                     f"status={header_value(text, 'Status') or 'unknown'}",
+                    f"risk={compact_state_value(header_value(text, 'Risk Level'))}",
+                    f"group={compact_state_value(header_value(text, 'Concurrent Group'))}",
+                    f"serial={compact_state_value(header_value(text, 'Serial Only'))}",
+                    f"shared={compact_state_value(header_value(text, 'Shared Files'))}",
                     f"heartbeat={compact_state_value(header_value(text, 'Heartbeat Status'))}",
                     f"actor={compact_state_value(header_value(text, 'Heartbeat Actor'))}",
                     f"session={compact_state_value(header_value(text, 'Heartbeat Session'))}",

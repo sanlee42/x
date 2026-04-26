@@ -85,5 +85,5 @@ The root control root normally starts on `master/main`. The run's materialized w
 - Role briefs and interaction synthesis/proposals must include strongest objection, weakest assumption, and evidence that would change the recommendation.
 - No materialized execution worktree and gated Architect Execution Plan, no lane work.
 - Reviewer `ready` is code-review evidence only; architect `merge-ok` is required before integration.
-- Architect directives are the control surface for pause, resume, replan, continue, and root decisions.
+- Architect directives are the control surface for pause, resume, replan, continue, parallelism/verification adjustments, requests for evidence, and root decisions.
 - Merge-back recommendation is not a merge. Do not merge to `master/main`, push, open PR, or call GitHub unless root explicitly asks.

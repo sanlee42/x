@@ -9,6 +9,7 @@ from x_state_common import *
 from x_state_directives import lane_work_directive_failures, merge_ready_directive_failures
 from x_state_execution import (
     lane_display_id,
+    lane_row_for_id,
     lane_path_for,
     lane_worktree,
     ready_review_for_attempt,
@@ -86,7 +87,58 @@ def architect_review_failures(root: Path, lane_id: str, lane_text: str, attempt_
         failures.append(f"{lane_id}: architect review {review_id} is not merge-ok")
     if header_value(architect_text, "Linked Attempt") != attempt_id:
         failures.append(f"{lane_id}: architect review {review_id} does not cover latest attempt")
+    risk_level, risk_failures = lane_risk_level(root, lane_id, lane_text)
+    failures.extend(risk_failures)
+    if risk_level == "high":
+        merge_ok_reviews = merge_ok_architect_reviews_for_attempt(root, lane_text, lane_id, attempt_id)
+        if len(merge_ok_reviews) < 2:
+            failures.append(
+                f"{lane_id}: high-risk lane requires a second architect review pass for latest attempt "
+                f"(found {len(merge_ok_reviews)} merge-ok review record)"
+            )
     return failures
+
+
+def lane_risk_level(root: Path, lane_id: str, lane_text: str) -> tuple[str, list[str]]:
+    plan_id = header_value(lane_text, "Linked Plan")
+    if plan_id:
+        try:
+            plan = resolve_state_file(root, "execution-plans", plan_id)
+            risk_level = normalized_state_value(lane_row_for_id(plan, lane_id).get("risk-level", ""))
+        except SystemExit as error:
+            return "", [f"{lane_id}: cannot read risk level from linked execution plan {plan_id}: {error}"]
+        if not risk_level:
+            return "", [f"{lane_id}: linked execution plan {plan_id} is missing risk level"]
+        return risk_level, []
+    return normalized_state_value(header_value(lane_text, "Risk Level")), []
+
+
+def normalized_state_value(value: str) -> str:
+    return " ".join(value.strip().split()).lower()
+
+
+def merge_ok_architect_reviews_for_attempt(root: Path, lane_text: str, lane_id: str, attempt_id: str) -> list[Path]:
+    run_id = header_value(lane_text, "Linked Run")
+    plan_id = header_value(lane_text, "Linked Plan")
+    reviews = []
+    seen: set[str] = set()
+    for review in files_for_run(root, "architect-reviews", run_id):
+        review_text = review.read_text(encoding="utf-8")
+        if review.stem in seen:
+            continue
+        if header_value(review_text, "Status") == "superseded":
+            continue
+        if header_value(review_text, "Recommendation") != "merge-ok":
+            continue
+        if header_value(review_text, "Linked Plan") != plan_id:
+            continue
+        if header_value(review_text, "Linked Lane") != lane_id:
+            continue
+        if header_value(review_text, "Linked Attempt") != attempt_id:
+            continue
+        seen.add(review.stem)
+        reviews.append(review)
+    return reviews
 
 
 def lane_patch(lane_tree: Path, lane_text: str) -> str:

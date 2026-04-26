@@ -71,10 +71,10 @@ class XStateDeepReviewTests(XStateTestCase):
         self.x("materialize", "--run-id", "run-dup-task", "--scope", "dup-task")
         lanes = "\n".join(
             [
-                "| Lane ID | Task ID | Allowed Scope | Forbidden Scope | Worktree Scope | Verification | Done Evidence |",
-                "| --- | --- | --- | --- | --- | --- | --- |",
-                "| lane-a | task-llm | README.md | Everything else. | lane-a | Inspect README. | README marker changed. |",
-                "| lane-b | task-llm | README.md | Everything else. | lane-b | Inspect README. | README marker changed. |",
+                "| Lane ID | Task ID | Allowed Scope | Forbidden Scope | Worktree Scope | Verification | Done Evidence | Risk Level | Concurrent Group | Serial Only | Shared Files |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                "| lane-a | task-llm | README.md | Everything else. | lane-a | Inspect README. | README marker changed. | standard | none | no | none |",
+                "| lane-b | task-llm | README.md | Everything else. | lane-b | Inspect README. | README marker changed. | standard | none | no | none |",
             ]
         )
         self.create_execution_plan("run-dup-task", parallel_lanes=lanes, integration_order="1. Integrate lane-a.\n2. Integrate lane-b.")

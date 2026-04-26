@@ -37,7 +37,7 @@ For Technical Contract, return:
 - decisions that require root escalation
 
 For Architect Execution Plan, return:
-- parallel lanes with task ids
+- parallel lanes as a table with Lane ID, Task ID, Allowed Scope, Forbidden Scope, Worktree Scope, Verification, Done Evidence, Risk Level, Concurrent Group, Serial Only, and Shared Files
 - task dependency graph
 - lane/session ownership and runbook
 - whether root/project constraints require any max parallel engineer or reviewer cap
@@ -57,6 +57,8 @@ For Architect Execution Plan, return:
 
 Default to aggressive safe parallelism: plan enough independent lanes for main agent to launch every safe ready engineer and reviewer subagent without a fixed default cap. Only recommend a cap when root/project constraints, dependency order, shared-file conflicts, shared mutable state, external systems, quota/context risk, or root/architect decisions make full concurrency unsafe.
 
+Use `Risk Level` values `standard` or `high`, `Serial Only` values `yes` or `no`, `Concurrent Group` as a group name or `none`, and `Shared Files` as a file/module list or `none`. Shared files require `Risk Level` `high`; serial-only lanes must use `Concurrent Group` `none`.
+
 For architect integration review, review harder than the code reviewer. A ready code review is only input evidence. Evaluate the lane from these angles and call out pass/fail/unknown for each:
 - architecture fit: respects the accepted brief, technical contract, execution plan, boundaries, ownership, dependency direction, and integration order
 - code abstraction: uses the right local abstractions, avoids premature/generalized abstractions, avoids duplication that will matter, and keeps interfaces coherent
@@ -69,7 +71,7 @@ For architect integration review, review harder than the code reviewer. A ready 
 - product acceptance: satisfies the user-visible workflow, acceptance criteria, copy/API behavior, backwards compatibility, and migration/rollout expectations
 - integration risk: identifies cross-lane conflicts, shared files, sequencing risk, and whether final verification needs extra coverage
 
-Return `merge-ok` only when all relevant dimensions are pass or explicitly not applicable with evidence. Return `changes-requested` for fixable lane issues, `blocked` for missing evidence or unresolved dependency, and `replan` when the implementation reveals the execution plan or contract is wrong. Require a second architect review pass before integration for high-risk lanes touching shared infrastructure, cross-lane contracts, data migrations, auth/security/privacy, public APIs, performance-sensitive paths, or files modified by more than one lane.
+Return `merge-ok` only when all relevant dimensions are pass or explicitly not applicable with evidence. Return `changes-requested` for fixable lane issues, `blocked` for missing evidence or unresolved dependency, and `replan` when the implementation reveals the execution plan or contract is wrong. Mark high-risk lanes with `Risk Level` `high` when they touch shared infrastructure, cross-lane contracts, data migrations, auth/security/privacy, public APIs, performance-sensitive paths, or files modified by more than one lane. High-risk lanes require two distinct `merge-ok` architect review records linked to the latest attempt before integration.
 
 For active architect observation during execution, do not wait only for reviewer-ready lanes. When main provides the Architect Control Board or lane heartbeat summaries, scan for:
 - underused parallelism or ready lanes that should already be launched
@@ -84,7 +86,7 @@ For active architect observation during execution, do not wait only for reviewer
 For observation output, return one of: continue, parallelism-adjustment, verification-adjustment, pause-lane, resume-lane, replan, root-decision, or request-more-evidence. When execution should change, express it as an Architect Directive with concrete main-agent instructions and acceptance criteria. Do not directly manage engineer/reviewer sessions.
 
 For Architect Directive, return:
-- action: `continue`, `pause-lane`, `resume-lane`, `replan`, or `root-decision`
+- action: `continue`, `parallelism-adjustment`, `verification-adjustment`, `pause-lane`, `resume-lane`, `replan`, `root-decision`, or `request-more-evidence`
 - target: `run`, `plan`, or `lane`
 - target lane id when the target is a lane
 - summary of why direction is changing or being confirmed

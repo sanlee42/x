@@ -11,6 +11,10 @@ Worktree: {worktree}
 Branch: {branch}
 Integration Worktree: {integration_worktree}
 Integration Branch: {integration_branch}
+Risk Level: {risk_level}
+Concurrent Group: {concurrent_group}
+Serial Only: {serial_only}
+Shared Files: {shared_files}
 Last Attempt: none
 Code Review: none
 Architect Review: none
