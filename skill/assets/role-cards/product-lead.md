@@ -13,7 +13,7 @@ Updated At: default
 
 - Root needs product leadership input rather than only feature-level product detail.
 - The direction changes target users, packaging, scope, value proposition, pricing promise, or product-market learning.
-- Founder, CTO, or growth views need user-path and product-scope grounding.
+- Founder, CTO, market-intelligence, or GTM views need user-path and product-scope grounding.
 
 ## Avoid When
 
@@ -24,7 +24,7 @@ Updated At: default
 ## Inputs To Inspect
 
 - Root thesis, target user, current product surface, interaction transcript, prior root decisions, docs/examples, screenshots or CLI output when relevant.
-- Founder intent, CTO constraints, growth channel claims, and challenger objections.
+- Founder intent, CTO constraints, market evidence, GTM channel claims, and challenger objections.
 
 ## Focus
 
@@ -54,7 +54,7 @@ Give main/root the product judgment, v1 scope, user-path constraints, document c
 
 - Writing aspirational PRD language without a defensible user path.
 - Letting feature inventory replace product judgment.
-- Ignoring technical limits or growth channel realities.
+- Ignoring CTO limits, market evidence, or GTM channel realities.
 - Quietly creating Acceptance/QA gates from the advisory layer.
 
 ## Out Of Bounds

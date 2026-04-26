@@ -15,6 +15,8 @@ PLAN_REQUIRED_SECTIONS = (
     "Objective",
     "Parallel Lanes",
     "Task Dependency Graph",
+    "Shared Contract Surfaces",
+    "Acceptance Checkpoints",
     "Lane Session Ownership",
     "Scope Boundaries",
     "Expected Artifacts",
@@ -72,6 +74,8 @@ def command_execution_plan(args: argparse.Namespace) -> None:
         objective=args.objective or "Pending.",
         parallel_lanes=args.parallel_lanes or "Pending.",
         dependency_graph=args.dependency_graph or "Pending.",
+        shared_contract_surfaces=args.shared_contract_surfaces or "Pending.",
+        acceptance_checkpoints=args.acceptance_checkpoints or "Pending.",
         lane_ownership=args.lane_ownership or "Pending.",
         allowed_scope=args.allowed_scope or "Pending.",
         forbidden_scope=args.forbidden_scope or "Pending.",
@@ -101,6 +105,8 @@ def required_execution_plan_args(args: argparse.Namespace) -> dict[str, str | No
         "--objective": args.objective,
         "--parallel-lanes": args.parallel_lanes,
         "--dependency-graph": args.dependency_graph,
+        "--shared-contract-surfaces": args.shared_contract_surfaces,
+        "--acceptance-checkpoints": args.acceptance_checkpoints,
         "--lane-ownership": args.lane_ownership,
         "--allowed-scope": args.allowed_scope,
         "--forbidden-scope": args.forbidden_scope,
@@ -205,6 +211,9 @@ def architect_gate_failures(root: Path, run: Path, plan: Path | None) -> list[st
         if not header_failures:
             failures.append(f"{plan.stem}: Parallel Lanes must include a markdown table with lane/task/scope/risk/parallelism/verification columns")
     integration_order = section_content(text, "Integration Order")
+    shared_contract_surfaces = section_content(text, "Shared Contract Surfaces")
+    acceptance_checkpoints = section_content(text, "Acceptance Checkpoints")
+    failures.extend(acceptance_checkpoint_failures(plan.stem, acceptance_checkpoints))
     for lane in lanes:
         lane_id = lane["lane-id"]
         for column in LANE_TABLE_COLUMNS:
@@ -226,6 +235,7 @@ def architect_gate_failures(root: Path, run: Path, plan: Path | None) -> list[st
             failures.append(f"{task_id}: task missing expected done evidence")
         if lane_id not in integration_order:
             failures.append(f"{plan.stem}: Integration Order does not include lane {lane_id}")
+        failures.extend(shared_contract_surface_failures(plan.stem, lane, shared_contract_surfaces))
     lane_ids = [lane["lane-id"] for lane in lanes]
     duplicates = sorted({lane_id for lane_id in lane_ids if lane_ids.count(lane_id) > 1})
     for lane_id in duplicates:
@@ -234,6 +244,71 @@ def architect_gate_failures(root: Path, run: Path, plan: Path | None) -> list[st
     for task_id in sorted({task_id for task_id in task_ids if task_ids.count(task_id) > 1}):
         failures.append(f"{plan.stem}: duplicate lane task {task_id}")
     return failures
+
+
+def acceptance_checkpoint_failures(plan_id: str, content: str) -> list[str]:
+    authored_content = authored_acceptance_checkpoint_content(content)
+    if not has_content(authored_content):
+        return []
+    normalized = re.sub(r"[\s_-]+", "-", authored_content.strip().lower())
+    failures = []
+    if "pre-integration" not in normalized:
+        failures.append(f"{plan_id}: Acceptance Checkpoints must include a pre-integration checkpoint")
+    if "final" not in normalized:
+        failures.append(f"{plan_id}: Acceptance Checkpoints must include a final checkpoint")
+    return failures
+
+
+def authored_acceptance_checkpoint_content(content: str) -> str:
+    lines = []
+    for line in content.splitlines():
+        normalized = line.strip().lower().replace("`", "")
+        if normalized.startswith("include at least one pre-integration checkpoint"):
+            continue
+        lines.append(line)
+    return "\n".join(lines).strip()
+
+
+def shared_contract_surface_failures(plan_id: str, lane: dict[str, str], content: str) -> list[str]:
+    lane_id = lane.get("lane-id", "unknown")
+    risk_level = normalized_lane_choice(lane.get("risk-level", ""))
+    shared_files = normalized_lane_choice(lane.get("shared-files", ""))
+    if risk_level != "high" and shared_files in {"", "none"}:
+        return []
+    if not has_content(content):
+        return []
+    if shared_contract_surface_mentions_lane(lane, content):
+        return []
+    return [
+        f"{plan_id}: Shared Contract Surfaces must name high-risk/shared lane {lane_id} "
+        "or its shared module/file"
+    ]
+
+
+def shared_contract_surface_mentions_lane(lane: dict[str, str], content: str) -> bool:
+    normalized = content.lower()
+    candidates = [lane.get("lane-id", ""), lane.get("task-id", "")]
+    candidates.extend(surface_tokens(lane.get("shared-files", "")))
+    candidates.extend(surface_tokens(lane.get("allowed-scope", "")))
+    for candidate in candidates:
+        item = candidate.strip().lower()
+        if item and item not in {"none", "none.", "-", "pending."} and item in normalized:
+            return True
+    return False
+
+
+def surface_tokens(value: str) -> list[str]:
+    tokens = []
+    for item in re.split(r"[,;\n]", value):
+        item = item.strip().strip("`")
+        if not item:
+            continue
+        for word in item.split():
+            cleaned = word.strip().strip("`.,:;()[]")
+            if "/" in cleaned or "." in cleaned or "-" in cleaned or "_" in cleaned:
+                tokens.append(cleaned)
+        tokens.append(item)
+    return tokens
 
 
 def deferred_decision_failures(text: str, plan_id: str) -> list[str]:
@@ -541,6 +616,7 @@ def lane_status_summary(lane: Path) -> str:
         f"group={compact_state_value(header_value(text, 'Concurrent Group'))}",
         f"serial={compact_state_value(header_value(text, 'Serial Only'))}",
         f"shared={compact_state_value(header_value(text, 'Shared Files'))}",
+        f"deep_review_required={deep_review_required_value(text)}",
         f"attempt={header_value(text, 'Last Attempt') or 'none'}",
         f"code-review={header_value(text, 'Code Review') or 'none'}",
         f"architect-review={header_value(text, 'Architect Review') or 'none'}",
@@ -574,6 +650,7 @@ def lane_heartbeats_summary(root: Path, run: Path) -> str:
                     f"group={compact_state_value(header_value(text, 'Concurrent Group'))}",
                     f"serial={compact_state_value(header_value(text, 'Serial Only'))}",
                     f"shared={compact_state_value(header_value(text, 'Shared Files'))}",
+                    f"deep_review_required={deep_review_required_value(text)}",
                     f"heartbeat={compact_state_value(header_value(text, 'Heartbeat Status'))}",
                     f"actor={compact_state_value(header_value(text, 'Heartbeat Actor'))}",
                     f"session={compact_state_value(header_value(text, 'Heartbeat Session'))}",
@@ -636,6 +713,16 @@ def state_value_present(value: str) -> bool:
         "not provided.",
         "no heartbeat yet.",
     }
+
+
+def deep_review_required_value(lane_text: str) -> str:
+    return "yes" if lane_deep_review_required(lane_text) else "no"
+
+
+def lane_deep_review_required(lane_text: str) -> bool:
+    risk_level = normalized_lane_choice(header_value(lane_text, "Risk Level"))
+    shared_files = normalized_lane_choice(header_value(lane_text, "Shared Files"))
+    return risk_level == "high" or shared_files not in {"", "none"}
 
 
 def lanes_for_task(root: Path, run_id: str, task_id: str) -> list[Path]:

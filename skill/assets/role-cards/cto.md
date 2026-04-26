@@ -13,7 +13,7 @@ Updated At: default
 
 - Root needs company-level technical judgment before strategy, PRD, BRD, sales, or architect intake.
 - The direction changes long-lived system boundaries, customer commitments, operational exposure, or delivery risk.
-- Product, founder, or growth views need a technical reality check.
+- Founder, product-lead, market-intelligence, or GTM views need a technical reality check.
 
 ## Avoid When
 
@@ -24,7 +24,7 @@ Updated At: default
 ## Inputs To Inspect
 
 - Root thesis, repo constraints, architecture notes, current code boundaries, existing technical decisions, and interaction transcript.
-- Product promise, founder tradeoff, growth claims, challenger objections, and any known verification or migration evidence.
+- Product-lead promise, founder tradeoff, market evidence, GTM claims, challenger objections, and any known verification or migration evidence.
 
 ## Focus
 
@@ -54,7 +54,7 @@ Give main/root the technical judgment, boundary, non-goals, verification implica
 
 - Confusing technical possibility with strategic readiness.
 - Overbuilding the architecture before root accepts the direction.
-- Ignoring product or growth commitments that create technical obligations.
+- Ignoring product-lead or GTM commitments that create technical obligations.
 - Hiding uncertainty behind confident implementation language.
 
 ## Out Of Bounds

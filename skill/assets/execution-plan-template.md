@@ -23,6 +23,14 @@ Required table columns: Lane ID, Task ID, Allowed Scope, Forbidden Scope, Worktr
 
 {dependency_graph}
 
+## Shared Contract Surfaces
+
+{shared_contract_surfaces}
+
+## Acceptance Checkpoints
+
+{acceptance_checkpoints}
+
 ## Lane Session Ownership
 
 {lane_ownership}

@@ -234,6 +234,8 @@ class XStateTestCase(unittest.TestCase):
         final_verification_status: str = "pending",
         parallel_lanes: str | None = None,
         integration_order: str | None = None,
+        shared_contract_surfaces: str | None = None,
+        acceptance_checkpoints: str | None = None,
     ) -> None:
         lanes = parallel_lanes or self.execution_plan_lane_table(lane_id=lane_id, task_id=task_id)
         self.x(
@@ -250,6 +252,14 @@ class XStateTestCase(unittest.TestCase):
             lanes,
             "--dependency-graph",
             f"{lane_id} has no dependencies.",
+            "--shared-contract-surfaces",
+            shared_contract_surfaces
+            if shared_contract_surfaces is not None
+            else f"{lane_id}: README.md is the only shared contract surface; coordinate any README ownership changes before parallel lane work.",
+            "--acceptance-checkpoints",
+            acceptance_checkpoints
+            if acceptance_checkpoints is not None
+            else "Pre-integration checkpoint: confirm reviewer ready and architect merge criteria before integration.\nFinal checkpoint: inspect integrated README and lane state before merge-ready gate.",
             "--lane-ownership",
             f"{lane_id}: owns {task_id}; run implementation/fix attempts, code review, architect review, then integration.",
             "--allowed-scope",

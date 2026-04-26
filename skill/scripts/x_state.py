@@ -319,6 +319,8 @@ def build_parser() -> argparse.ArgumentParser:
     execution_plan.add_argument("--objective")
     execution_plan.add_argument("--parallel-lanes")
     execution_plan.add_argument("--dependency-graph")
+    execution_plan.add_argument("--shared-contract-surfaces")
+    execution_plan.add_argument("--acceptance-checkpoints")
     execution_plan.add_argument("--lane-ownership")
     execution_plan.add_argument("--allowed-scope")
     execution_plan.add_argument("--forbidden-scope")

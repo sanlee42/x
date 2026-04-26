@@ -9,6 +9,7 @@ from x_state_common import *
 from x_state_directives import lane_work_directive_failures, merge_ready_directive_failures
 from x_state_execution import (
     lane_display_id,
+    lane_deep_review_required,
     lane_row_for_id,
     lane_path_for,
     lane_worktree,
@@ -68,7 +69,10 @@ def lane_integration_failures(root: Path, lane: Path, lane_tree: Path) -> list[s
         failures.append(f"{lane_id}: missing attempt")
         return failures
     if ready_review_for_attempt(root, attempt_id) is None:
-        failures.append(f"{lane_id}: missing ready code review for latest attempt")
+        if lane_deep_review_required(text):
+            failures.append(f"{lane_id}: deep review required; missing ready code review for latest attempt")
+        else:
+            failures.append(f"{lane_id}: missing ready code review for latest attempt")
     failures.extend(architect_review_failures(root, lane_id, text, attempt_id))
     untracked = untracked_files(lane_tree)
     if untracked:
@@ -79,6 +83,8 @@ def lane_integration_failures(root: Path, lane: Path, lane_tree: Path) -> list[s
 def architect_review_failures(root: Path, lane_id: str, lane_text: str, attempt_id: str) -> list[str]:
     review_id = header_value(lane_text, "Architect Review")
     if not review_id or review_id == "none":
+        if lane_deep_review_required(lane_text):
+            return [f"{lane_id}: deep review required; missing architect review"]
         return [f"{lane_id}: missing architect review"]
     architect_review = resolve_state_file(root, "architect-reviews", review_id)
     architect_text = architect_review.read_text(encoding="utf-8")
@@ -220,7 +226,10 @@ def planned_lane_failures(root: Path, run: Path, plan: Path, lane_id: str) -> li
         failures.append(f"{lane_id}: missing latest attempt")
         return failures
     if ready_review_for_attempt(root, attempt_id) is None:
-        failures.append(f"{lane_id}: latest attempt lacks ready code review")
+        if lane_deep_review_required(lane_text):
+            failures.append(f"{lane_id}: deep review required; latest attempt lacks ready code review")
+        else:
+            failures.append(f"{lane_id}: latest attempt lacks ready code review")
     failures.extend(architect_review_failures(root, lane_id, lane_text, attempt_id))
     return failures
 

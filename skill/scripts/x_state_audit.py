@@ -49,11 +49,14 @@ def build_audit(root: Path, run: Path, codex_state: Path) -> dict[str, Any]:
     run_text = run.read_text(encoding="utf-8")
     run_info = run_summary(run, run_text)
     packages = package_records(root, run.stem)
+    flow = flow_metrics(root, run.stem)
+    tokens = token_metrics(codex_state, packages)
     return {
         "run": run_info,
         "engineering_scale": engineering_scale(root, run, run_text),
-        "flow": flow_metrics(root, run.stem),
-        "tokens": token_metrics(codex_state, packages),
+        "flow": flow,
+        "tokens": tokens,
+        "bottlenecks": bottleneck_metrics(root, run.stem, flow, tokens),
         "written_path": None,
     }
 
@@ -191,6 +194,7 @@ def flow_metrics(root: Path, run_id: str) -> dict[str, Any]:
         if header_value(lane.read_text(encoding="utf-8"), "Integrated") == "yes"
         or header_value(lane.read_text(encoding="utf-8"), "Status") == "integrated"
     ]
+    deep_review_required = deep_review_required_lanes(lanes)
     return {
         "packages": len(packages),
         "packages_by_role": count_headers(packages, "Role"),
@@ -209,7 +213,127 @@ def flow_metrics(root: Path, run_id: str) -> dict[str, Any]:
             header_value(lane.read_text(encoding="utf-8"), "Lane ID") or lane.stem
             for lane in integrated_lanes
         ],
+        "deep_review_required_lanes": len(deep_review_required),
+        "deep_review_required_lane_ids": [item["lane_id"] for item in deep_review_required],
     }
+
+
+def deep_review_required_lanes(lanes: list[Path]) -> list[dict[str, Any]]:
+    from x_state_execution import lane_deep_review_required, lane_display_id
+
+    required = []
+    for lane in lanes:
+        text = lane.read_text(encoding="utf-8")
+        if not lane_deep_review_required(text):
+            continue
+        required.append(
+            {
+                "lane_id": lane_display_id(lane),
+                "status": header_value(text, "Status") or "unknown",
+                "risk_level": header_value(text, "Risk Level") or "unknown",
+                "shared_files": header_value(text, "Shared Files") or "none",
+                "code_review": header_value(text, "Code Review") or "none",
+                "architect_review": header_value(text, "Architect Review") or "none",
+            }
+        )
+    return required
+
+
+def bottleneck_metrics(root: Path, run_id: str, flow: dict[str, Any], tokens: dict[str, Any]) -> dict[str, Any]:
+    role_load = role_load_metrics(flow.get("packages_by_role", {}), tokens.get("tokens_by_role", {}))
+    return {
+        "role_load": role_load,
+        "largest_token_packages": largest_token_packages(tokens.get("packages", [])),
+        "repeated_non_ready_tasks": repeated_non_ready_tasks(root, run_id),
+        "active_attempts_without_result": active_attempts_without_result(root, run_id),
+        "stale_or_missing_heartbeat_lanes": stale_or_missing_heartbeat_lanes(root, run_id),
+        "deep_review_required_lanes": deep_review_required_lanes(files_for_run(root, "lanes", run_id)),
+    }
+
+
+def role_load_metrics(packages_by_role: dict[str, int], tokens_by_role: dict[str, int]) -> list[dict[str, Any]]:
+    roles = sorted(set(packages_by_role) | set(tokens_by_role))
+    return [
+        {
+            "role": role,
+            "packages": packages_by_role.get(role, 0),
+            "tokens": tokens_by_role.get(role, 0),
+        }
+        for role in roles
+    ]
+
+
+def largest_token_packages(packages: list[dict[str, Any]], *, limit: int = 5) -> list[dict[str, Any]]:
+    with_tokens = [
+        {
+            "package_id": package["package_id"],
+            "role": package["role"],
+            "tokens_used": package["tokens_used"],
+        }
+        for package in packages
+        if isinstance(package.get("tokens_used"), int)
+    ]
+    return sorted(with_tokens, key=lambda item: item["tokens_used"], reverse=True)[:limit]
+
+
+def repeated_non_ready_tasks(root: Path, run_id: str) -> list[dict[str, Any]]:
+    repeated = []
+    for task in files_for_run(root, "tasks", run_id):
+        reviews = [
+            review
+            for review in files_for_task(root, "reviews", task.stem)
+            if item_recommendation(review) != "ready"
+        ]
+        if len(reviews) <= 1:
+            continue
+        latest = reviews[-1]
+        latest_text = latest.read_text(encoding="utf-8")
+        repeated.append(
+            {
+                "task_id": task.stem,
+                "non_ready_reviews": len(reviews),
+                "latest_review": latest.stem,
+                "latest_loopback_target": header_value(latest_text, "Loopback Target") or "unknown",
+            }
+        )
+    return repeated
+
+
+def active_attempts_without_result(root: Path, run_id: str) -> list[dict[str, Any]]:
+    active = []
+    for attempt in files_for_run(root, "attempts", run_id):
+        text = attempt.read_text(encoding="utf-8")
+        if header_value(text, "Status") != "active":
+            continue
+        active.append(
+            {
+                "attempt_id": attempt.stem,
+                "task_id": header_value(text, "Linked Task") or "unknown",
+                "lane_id": header_value(text, "Linked Lane") or "none",
+                "started_at": header_value(text, "Started At") or "unknown",
+            }
+        )
+    return active
+
+
+def stale_or_missing_heartbeat_lanes(root: Path, run_id: str) -> list[dict[str, Any]]:
+    from x_state_execution import lane_attention, lane_display_id
+
+    lanes = []
+    for lane in files_for_run(root, "lanes", run_id):
+        text = lane.read_text(encoding="utf-8")
+        attention = lane_attention(text)
+        if attention not in {"stale", "no-heartbeat"}:
+            continue
+        lanes.append(
+            {
+                "lane_id": lane_display_id(lane),
+                "attention": attention,
+                "heartbeat_status": header_value(text, "Heartbeat Status") or "none",
+                "heartbeat_at": header_value(text, "Heartbeat At") or "none",
+            }
+        )
+    return lanes
 
 
 def count_headers(paths: list[Path], header: str) -> dict[str, int]:
@@ -373,6 +497,7 @@ def render_markdown(audit: dict[str, Any]) -> str:
     scale = audit["engineering_scale"]
     flow = audit["flow"]
     tokens = audit["tokens"]
+    bottlenecks = audit["bottlenecks"]
     lines = [
         f"# x Run Audit: {run['run_id']}",
         "",
@@ -406,6 +531,7 @@ def render_markdown(audit: dict[str, Any]) -> str:
         f"| Directives | {flow['directives']} |",
         f"| Lanes | {flow['lanes']} |",
         f"| Integrated Lanes | {flow['integrated_lanes']} |",
+        f"| Deep Review Required Lanes | {flow['deep_review_required_lanes']} |",
         "",
         "### Packages By Role",
         "",
@@ -447,6 +573,36 @@ def render_markdown(audit: dict[str, Any]) -> str:
                 render_unresolved_table(unresolved),
             ]
         )
+    lines.extend(
+        [
+            "",
+            "## Bottlenecks",
+            "",
+            "### Role Package And Token Load",
+            "",
+            render_role_load_table(bottlenecks["role_load"]),
+            "",
+            "### Largest Token Packages",
+            "",
+            render_largest_token_packages_table(bottlenecks["largest_token_packages"]),
+            "",
+            "### Repeated Non-Ready Tasks",
+            "",
+            render_repeated_non_ready_table(bottlenecks["repeated_non_ready_tasks"]),
+            "",
+            "### Active Attempts Without Result",
+            "",
+            render_active_attempts_table(bottlenecks["active_attempts_without_result"]),
+            "",
+            "### Stale Or Missing Heartbeat Lanes",
+            "",
+            render_heartbeat_bottlenecks_table(bottlenecks["stale_or_missing_heartbeat_lanes"]),
+            "",
+            "### Deep Review Required Lanes",
+            "",
+            render_deep_review_lanes_table(bottlenecks["deep_review_required_lanes"]),
+        ]
+    )
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -490,6 +646,91 @@ def render_unresolved_table(packages: list[dict[str, Any]]) -> str:
                 reason=escape_cell(package["reason"] or "-"),
             )
         )
+    return "\n".join(rows)
+
+
+def render_role_load_table(items: list[dict[str, Any]]) -> str:
+    if not items:
+        return "| Role | Packages | Tokens |\n| --- | ---: | ---: |\n| - | 0 | 0 |"
+    rows = ["| Role | Packages | Tokens |", "| --- | ---: | ---: |"]
+    rows.extend(f"| {escape_cell(item['role'])} | {item['packages']} | {item['tokens']} |" for item in items)
+    return "\n".join(rows)
+
+
+def render_largest_token_packages_table(items: list[dict[str, Any]]) -> str:
+    if not items:
+        return "| Package | Role | Tokens |\n| --- | --- | ---: |\n| - | - | 0 |"
+    rows = ["| Package | Role | Tokens |", "| --- | --- | ---: |"]
+    rows.extend(
+        f"| {escape_cell(item['package_id'])} | {escape_cell(item['role'])} | {item['tokens_used']} |"
+        for item in items
+    )
+    return "\n".join(rows)
+
+
+def render_repeated_non_ready_table(items: list[dict[str, Any]]) -> str:
+    if not items:
+        return "| Task | Non-Ready Reviews | Latest Review | Latest Loopback |\n| --- | ---: | --- | --- |\n| - | 0 | - | - |"
+    rows = ["| Task | Non-Ready Reviews | Latest Review | Latest Loopback |", "| --- | ---: | --- | --- |"]
+    rows.extend(
+        "| {task} | {count} | {review} | {loopback} |".format(
+            task=escape_cell(item["task_id"]),
+            count=item["non_ready_reviews"],
+            review=escape_cell(item["latest_review"]),
+            loopback=escape_cell(item["latest_loopback_target"]),
+        )
+        for item in items
+    )
+    return "\n".join(rows)
+
+
+def render_active_attempts_table(items: list[dict[str, Any]]) -> str:
+    if not items:
+        return "| Attempt | Task | Lane | Started At |\n| --- | --- | --- | --- |\n| - | - | - | - |"
+    rows = ["| Attempt | Task | Lane | Started At |", "| --- | --- | --- | --- |"]
+    rows.extend(
+        "| {attempt} | {task} | {lane} | {started} |".format(
+            attempt=escape_cell(item["attempt_id"]),
+            task=escape_cell(item["task_id"]),
+            lane=escape_cell(item["lane_id"]),
+            started=escape_cell(item["started_at"]),
+        )
+        for item in items
+    )
+    return "\n".join(rows)
+
+
+def render_heartbeat_bottlenecks_table(items: list[dict[str, Any]]) -> str:
+    if not items:
+        return "| Lane | Attention | Heartbeat Status | Heartbeat At |\n| --- | --- | --- | --- |\n| - | - | - | - |"
+    rows = ["| Lane | Attention | Heartbeat Status | Heartbeat At |", "| --- | --- | --- | --- |"]
+    rows.extend(
+        "| {lane} | {attention} | {status} | {at} |".format(
+            lane=escape_cell(item["lane_id"]),
+            attention=escape_cell(item["attention"]),
+            status=escape_cell(item["heartbeat_status"]),
+            at=escape_cell(item["heartbeat_at"]),
+        )
+        for item in items
+    )
+    return "\n".join(rows)
+
+
+def render_deep_review_lanes_table(items: list[dict[str, Any]]) -> str:
+    if not items:
+        return "| Lane | Status | Risk | Shared Files | Code Review | Architect Review |\n| --- | --- | --- | --- | --- | --- |\n| - | - | - | - | - | - |"
+    rows = ["| Lane | Status | Risk | Shared Files | Code Review | Architect Review |", "| --- | --- | --- | --- | --- | --- |"]
+    rows.extend(
+        "| {lane} | {status} | {risk} | {shared} | {code} | {architect} |".format(
+            lane=escape_cell(item["lane_id"]),
+            status=escape_cell(item["status"]),
+            risk=escape_cell(item["risk_level"]),
+            shared=escape_cell(item["shared_files"]),
+            code=escape_cell(item["code_review"]),
+            architect=escape_cell(item["architect_review"]),
+        )
+        for item in items
+    )
     return "\n".join(rows)
 
 

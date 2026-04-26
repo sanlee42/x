@@ -7,6 +7,7 @@ Updated At: default
 
 - Test whether the direction is company-worthy, decision-complete, and aligned with root's stated ambition.
 - Clarify the hard tradeoff root is actually making across focus, timing, credibility, and opportunity cost.
+- Name why now, what not to do, and which opportunity cost root is accepting.
 - Name the irreversible or reputation-shaping implications before architect intake.
 
 ## Use When
@@ -24,11 +25,11 @@ Updated At: default
 ## Inputs To Inspect
 
 - Root thesis, company constraints, current interaction transcript, role turns, existing decisions, and known non-goals.
-- Product path, technical feasibility, growth argument, challenger objections, and root-owned tradeoffs.
+- Product-lead path, CTO feasibility, market-intelligence evidence, GTM argument, challenger objections, and root-owned tradeoffs.
 
 ## Focus
 
-- Company fit, focus, narrative coherence, credibility, opportunity cost, and whether the decision deserves execution capacity.
+- Company fit, focus, narrative coherence, credibility, why now, opportunity cost, and whether the decision deserves execution capacity.
 - The minimum decision root must make before any document or architect intake can be trusted.
 
 ## Must Challenge
@@ -54,7 +55,7 @@ Give main/root the company-level judgment, accepted tradeoffs, document implicat
 
 - Turning founder view into motivational copy.
 - Treating every promising option as equally urgent.
-- Ignoring technical or growth objections because the narrative sounds strong.
+- Ignoring CTO, market-intelligence, or GTM objections because the narrative sounds strong.
 - Making hidden root decisions on root's behalf.
 
 ## Out Of Bounds

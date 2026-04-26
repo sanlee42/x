@@ -11,17 +11,18 @@ Use this when `$x architect` starts or `$x resume` needs to continue execution w
 
 ## Optional Interaction Handoff
 
-Root-facing interaction is an advisory layer before architect execution. Use it when root asks for product, technical, strategy, founder, CTO, product-lead, growth, challenger, company-council, or custom role discussion before committing to an architecture direction.
+Root-facing interaction is an advisory layer before architect execution. Use it when root asks for `$x council`, `$x council with <roles>`, `$x with <role>`, or custom role discussion before committing to an architecture direction. The default company council is `founder`, `cto`, `product-lead`, `market-intelligence`, `gtm`, and `challenger`.
 
 Typical interaction state helper flow:
 
 ```bash
 python ~/.codex/skills/x/scripts/x_state.py role-list
-python ~/.codex/skills/x/scripts/x_state.py interaction-start --mode joint --title "<topic>" --agenda "<root thesis or question>" --participants product technical strategy
-# For `$x company-council: <topic>`, use `--participants company-council`
+python ~/.codex/skills/x/scripts/x_state.py interaction-start --mode joint --title "<topic>" --agenda "<root thesis or question>" --participants council
+# For `$x council with founder, gtm, challenger: <topic>`, use explicit participants:
+python ~/.codex/skills/x/scripts/x_state.py interaction-start --mode joint --title "<topic>" --agenda "<root thesis or question>" --participants founder gtm challenger
 python ~/.codex/skills/x/scripts/x_state.py interaction-turn --interaction-id "<interaction-id>" --actor root --turn-kind statement --body "<root thesis>"
-python ~/.codex/skills/x/scripts/x_state.py package --role councilor --interaction-id "<interaction-id>" --council-role technical
-python ~/.codex/skills/x/scripts/x_state.py role-brief --interaction-id "<interaction-id>" --role technical --title "<brief>" --recommendation "<stance>" --rationale "<why>" --rejected-options "<rejected>" --risks "<risks>" --decisions-needed "<root decisions>" --implications-for-architect "<handoff notes>" --strongest-objection "<objection>" --weakest-assumption "<assumption>" --evidence-to-change "<evidence>"
+python ~/.codex/skills/x/scripts/x_state.py package --role councilor --interaction-id "<interaction-id>" --council-role cto
+python ~/.codex/skills/x/scripts/x_state.py role-brief --interaction-id "<interaction-id>" --role cto --title "<brief>" --recommendation "<stance>" --rationale "<why>" --rejected-options "<rejected>" --risks "<risks>" --decisions-needed "<root decisions>" --implications-for-architect "<handoff notes>" --strongest-objection "<objection>" --weakest-assumption "<assumption>" --evidence-to-change "<evidence>"
 python ~/.codex/skills/x/scripts/x_state.py interaction-summarize --interaction-id "<interaction-id>" --agreements "<agreements>" --core-judgment "<core judgment>" --key-arguments "<arguments>" --conflicts "<conflicts>" --rejected-options "<rejected>" --root-decisions-needed "<decisions>" --recommended-direction "<proposal>" --architect-intake-draft "<draft>" --strongest-objection "<objection>" --weakest-assumption "<assumption>" --evidence-to-change "<evidence>" --document-use-notes "<document notes>"
 python ~/.codex/skills/x/scripts/x_state.py decision --interaction-id "<interaction-id>" --title "<decision>" --decision "<accepted direction>"
 python ~/.codex/skills/x/scripts/x_state.py architect-intake --interaction-id "<interaction-id>" --decision-id "<decision-id>" --status accepted --title "<intake>" --accepted-direction "<accepted direction>" --architecture-input "<architect input>" --scope-boundaries "<scope>" --non-goals "<non-goals>" --root-decisions "<decisions>" --risks "<risks>" --handoff-to-architect "<handoff>"
@@ -71,10 +72,10 @@ Interaction role views must not create Engineer Tasks, start attempts, manage la
    ```
 9. Architect produces an Architect Execution Plan for long-run parallel execution, then main runs the readiness gate:
    ```bash
-   python ~/.codex/skills/x/scripts/x_state.py execution-plan --run-id "<run-id>" --title "<plan>" --objective "<objective>" --parallel-lanes "<lane table>" --dependency-graph "<graph>" --lane-ownership "<ownership>" --allowed-scope "<scope>" --forbidden-scope "<scope>" --expected-artifacts "<artifacts>" --verification-matrix "<matrix>" --reviewer-criteria "<criteria>" --architect-merge-criteria "<criteria>" --integration-order "<order>" --known-risks "<risks>" --loopback-triggers "<triggers>" --blocked-recovery "<recovery>" --root-decisions "<root decisions>"
+   python ~/.codex/skills/x/scripts/x_state.py execution-plan --run-id "<run-id>" --title "<plan>" --objective "<objective>" --parallel-lanes "<lane table>" --dependency-graph "<graph>" --shared-contract-surfaces "<surfaces>" --acceptance-checkpoints "<checkpoints>" --lane-ownership "<ownership>" --allowed-scope "<scope>" --forbidden-scope "<scope>" --expected-artifacts "<artifacts>" --verification-matrix "<matrix>" --reviewer-criteria "<criteria>" --architect-merge-criteria "<criteria>" --integration-order "<order>" --known-risks "<risks>" --loopback-triggers "<triggers>" --blocked-recovery "<recovery>" --root-decisions "<root decisions>"
    python ~/.codex/skills/x/scripts/x_state.py architect-gate --run-id "<run-id>"
    ```
-   The plan must be decision-complete for every lane. Its `Parallel Lanes` table must include `Lane ID`, `Task ID`, `Allowed Scope`, `Forbidden Scope`, `Worktree Scope`, `Verification`, `Done Evidence`, `Risk Level`, `Concurrent Group`, `Serial Only`, and `Shared Files`. `Risk Level` is `standard` or `high`; `Serial Only` is `yes` or `no`; `Concurrent Group` is a group name or `none`; `Shared Files` is a file/module list or `none`. Shared files require `Risk Level` `high`, and serial-only lanes must use `Concurrent Group` `none`. It must include exact lane/task scope, verification, done evidence, runbook, loop policy, review criteria, architect merge criteria, integration order, concurrent lane groups, serial-only lanes, shared-file conflict risks, blocked-state recovery, and root escalation boundaries. Unresolved `TBD`, `figure out`, `use best judgment`, or `decide later` language fails the readiness gate unless explicitly recorded as a root decision.
+   The plan must be decision-complete for every lane before parallel lane work starts. Its `Parallel Lanes` table must include `Lane ID`, `Task ID`, `Allowed Scope`, `Forbidden Scope`, `Worktree Scope`, `Verification`, `Done Evidence`, `Risk Level`, `Concurrent Group`, `Serial Only`, and `Shared Files`. `Risk Level` is `standard` or `high`; `Serial Only` is `yes` or `no`; `Concurrent Group` is a group name or `none`; `Shared Files` is a file/module list or `none`. Shared files require `Risk Level` `high`, and serial-only lanes must use `Concurrent Group` `none`. Before any lane starts, stabilize `Shared Contract Surfaces` for every high-risk/shared-file lane and define `Acceptance Checkpoints` with at least one `pre-integration` checkpoint and one `final` checkpoint. It must include exact lane/task scope, verification, done evidence, runbook, loop policy, review criteria, architect merge criteria, integration order, concurrent lane groups, serial-only lanes, shared-file conflict risks, blocked-state recovery, and root escalation boundaries. Unresolved `TBD`, `figure out`, `use best judgment`, or `decide later` language fails the readiness gate unless explicitly recorded as a root decision.
 10. Start lane sessions/worktrees from the gated plan:
     ```bash
     python ~/.codex/skills/x/scripts/x_state.py lane-start --run-id "<run-id>" --lane-id "<lane-id>" --task-id "<task-id>"
@@ -100,7 +101,7 @@ Interaction role views must not create Engineer Tasks, start attempts, manage la
     python ~/.codex/skills/x/scripts/x_state.py package --role reviewer --task-id "<task-id>" --attempt-id "<attempt-id>"
     ```
     If `--diff` and `--diff-stat` are omitted, the script captures the lane worktree diff from the lane/integration merge-base. Reviewer packages reject untracked lane files because they would not be captured in the review or integration diff.
-    `--reviewer-backend codex-native` is an opt-in alternative that runs `codex review --base <lane-base> -` from the lane worktree and records the review output directly without embedding the full raw diff in a package.
+    Recommended reviewer handoff: `--reviewer-backend codex-native` runs `codex review --base <lane-base> -` from the lane worktree and records the review output directly without embedding the full raw diff in a package. The CLI default remains `package` for compatibility.
 15. Record code review:
     ```bash
     python ~/.codex/skills/x/scripts/x_state.py review --title "<review>" --attempt-id "<attempt-id>" --summary "<summary>" --recommendation ready --reviewed-diff "<diff evidence>" --verification "<assessment>"
@@ -109,7 +110,7 @@ Interaction role views must not create Engineer Tasks, start attempts, manage la
     ```bash
     python ~/.codex/skills/x/scripts/x_state.py attempt-start --task-id "<task-id>" --lane-id "<lane-id>" --kind fix --source-review-id "<review-id>" --title "<fix title>"
     ```
-17. Continue engineer package -> attempt-result -> reviewer package -> reviewer -> review until the lane has a ready code review.
+17. Continue engineer package -> attempt-result -> reviewer package -> reviewer -> review until the lane has a ready code review. The first non-ready review can loop to engineer; the second non-ready review defaults to architect loopback. If the latest unresolved review loops to architect/root, do not start another engineer fix attempt until an architect directive or architect review provides the next execution instruction.
 18. Architect performs strong integration review. Reviewer `ready` alone is not integration permission:
     ```bash
     python ~/.codex/skills/x/scripts/x_state.py architect-review --lane-id "<lane-id>" --attempt-id "<attempt-id>" --title "<architect review>" --summary "<summary>" --recommendation merge-ok --criteria "<criteria>" --verification "<assessment>" --integration-risk "<risk>"

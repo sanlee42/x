@@ -10,13 +10,12 @@ from x_state_common import *
 
 DISCUSSION_MODES = ("with", "joint", "independent")
 DISCUSSION_STATUSES = ("active", "synthesized", "closed", "superseded")
-LEGACY_ROLE_ALIASES = {"product-acceptance": "product"}
 DISCUSSION_TURN_KINDS = ("statement", "question", "viewpoint", "challenge", "critique", "response", "summary", "decision-candidate")
 ROLE_BRIEF_STATUSES = ("draft", "ready", "superseded")
 ARCHITECT_INTAKE_STATUSES = ("draft", "accepted", "superseded")
 ROLE_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 PARTICIPANT_PRESETS = {
-    "company-council": ("founder", "cto", "product-lead", "growth", "challenger"),
+    "council": ("founder", "cto", "product-lead", "market-intelligence", "gtm", "challenger"),
 }
 RESERVED_ROLE_NAMES = {"root", "main", "engineer", "reviewer", "councilor", *PARTICIPANT_PRESETS}
 
@@ -394,10 +393,6 @@ def command_role_list(args: argparse.Namespace) -> None:
     for role in names:
         print(f"- {role} ({role_source(root, role)})")
     print()
-    print("## Legacy Aliases")
-    for alias, target in sorted(LEGACY_ROLE_ALIASES.items()):
-        print(f"- {alias} -> {target}")
-    print()
     print("## Participant Presets")
     for preset, participants in sorted(PARTICIPANT_PRESETS.items()):
         print(f"- {preset}: {', '.join(participants)}")
@@ -427,7 +422,7 @@ def command_role_set(args: argparse.Namespace) -> None:
             focus=(args.focus or "Not specified.").strip(),
             must_challenge=(args.must_challenge or "Not specified.").strip(),
             operating_posture=(args.operating_posture or "Be advisory, concrete, and decision-oriented. Keep root and architect handoff needs visible.").strip(),
-            evidence_standard=(args.evidence_standard or "Use available repo, product, strategy, or interaction evidence. Label assumptions when evidence is missing.").strip(),
+            evidence_standard=(args.evidence_standard or "Use available repo, product, market, GTM, or interaction evidence. Label assumptions when evidence is missing.").strip(),
             handoff_value=(args.handoff_value or "Produce findings that help root decide and help architect avoid guessing during intake.").strip(),
             failure_modes=(args.failure_modes or "Generic advice, hidden assumptions, scope creep, and bypassing architect-to-code gates.").strip(),
             out_of_bounds=(args.out_of_bounds or "Do not create execution tasks, manage lanes, assign reviewers, or issue architect directives.").strip(),
@@ -497,13 +492,12 @@ def validate_mode_participants(mode: str, participants: list[str]) -> None:
 def normalized_interaction_actor(actor: str) -> str:
     if actor in {"root", "main"}:
         return actor
-    return LEGACY_ROLE_ALIASES.get(actor.strip().lower(), actor.strip().lower())
+    return actor.strip().lower()
 
 
 def validate_actor_for_discussion(discussion: Path, actor: str) -> None:
     if actor in {"root", "main"}:
         return
-    actor = LEGACY_ROLE_ALIASES.get(actor, actor)
     participants = {item.strip() for item in header_value(discussion.read_text(encoding="utf-8"), "Participants").split(",")}
     if actor not in participants:
         raise SystemExit(f"actor {actor} is not a participant in interaction {discussion.stem}")
@@ -598,8 +592,6 @@ def link_decision_to_intake(decision: Path, discussion_id: str, intake_id: str, 
 
 def normalize_role_name(role: str) -> str:
     normalized = role.strip().lower()
-    if normalized in LEGACY_ROLE_ALIASES:
-        normalized = LEGACY_ROLE_ALIASES[normalized]
     if normalized in RESERVED_ROLE_NAMES:
         raise SystemExit(f"reserved role name: {role}")
     if not ROLE_NAME_PATTERN.match(normalized):
@@ -624,7 +616,6 @@ def all_role_names(root: Path) -> list[str]:
     if runtime_dir.exists():
         names.update(path.stem for path in runtime_dir.glob("*.md"))
     names.difference_update(RESERVED_ROLE_NAMES)
-    names.difference_update(LEGACY_ROLE_ALIASES)
     return sorted(names)
 
 

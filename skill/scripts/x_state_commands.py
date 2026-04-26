@@ -16,6 +16,7 @@ from x_state_execution import (
     require_architect_gate_passed,
 )
 from x_state_integration import execution_plan_merge_ready_failures
+from x_state_loopback import engineer_fix_loopback_failures
 from x_state_mailbox import open_mailbox_summary
 
 
@@ -424,6 +425,10 @@ def command_attempt_start(args: argparse.Namespace) -> None:
     require_materialized_run(run, "attempt-start")
     require_architect_gate_passed(root, run)
     lane = active_lane_for_task(root, run_id, task.stem, args.lane_id)
+    if args.kind == "fix":
+        failures = engineer_fix_loopback_failures(root, run_id, task.stem, lane)
+        if failures:
+            raise SystemExit("fix attempt blocked: " + "; ".join(failures))
     attempt_number = len(files_for_task(root, "attempts", task.stem)) + 1
     attempt_id = args.attempt_id or f"{task.stem}-a{attempt_number}"
     attempt_path = unique_path(state_dirs(root)["attempts"], attempt_id)

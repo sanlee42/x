@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -177,6 +178,43 @@ class XStateWorkflowTests(XStateTestCase):
         failed = self.x("architect-gate", "--run-id", "run-lane-schema", check=False)
         self.assertNotEqual(failed.returncode, 0)
         self.assertIn("shared files require risk level high", failed.stderr + failed.stdout)
+
+    def test_architect_gate_requires_shared_contract_surfaces_and_acceptance_checkpoints(self) -> None:
+        self.x("start", "--run-id", "run-plan-gates", "--goal", "Plan gates")
+        self.accept_brief("run-plan-gates")
+        self.create_contract_and_task("run-plan-gates")
+        self.x("materialize", "--run-id", "run-plan-gates", "--scope", "plan-gates")
+
+        self.create_execution_plan(
+            "run-plan-gates",
+            plan_id="plan-missing-surface",
+            parallel_lanes=self.execution_plan_lane_table(risk_level="high", shared_files="README.md"),
+            shared_contract_surfaces="No shared surfaces.",
+        )
+        failed = self.x("architect-gate", "--run-id", "run-plan-gates", check=False)
+        self.assertNotEqual(failed.returncode, 0)
+        output = failed.stderr + failed.stdout
+        self.assertIn("Shared Contract Surfaces must name high-risk/shared lane lane-llm", output)
+        self.x("execution-plan", "--run-id", "run-plan-gates", "--plan-id", "plan-missing-surface", "--status", "superseded")
+
+        self.create_execution_plan(
+            "run-plan-gates",
+            plan_id="plan-missing-pre-checkpoint",
+            acceptance_checkpoints="Final checkpoint: inspect integrated README.",
+        )
+        failed = self.x("architect-gate", "--run-id", "run-plan-gates", check=False)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn("Acceptance Checkpoints must include a pre-integration checkpoint", failed.stderr + failed.stdout)
+        self.x("execution-plan", "--run-id", "run-plan-gates", "--plan-id", "plan-missing-pre-checkpoint", "--status", "superseded")
+
+        self.create_execution_plan(
+            "run-plan-gates",
+            plan_id="plan-missing-final-checkpoint",
+            acceptance_checkpoints="Pre-integration checkpoint: confirm reviewer ready before integration.",
+        )
+        failed = self.x("architect-gate", "--run-id", "run-plan-gates", check=False)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn("Acceptance Checkpoints must include a final checkpoint", failed.stderr + failed.stdout)
 
     def test_same_lane_id_can_be_reused_across_runs(self) -> None:
         self.prepare_materialized_run("run-one", "one")
@@ -374,6 +412,7 @@ class XStateWorkflowTests(XStateTestCase):
         status = self.x("lane-status", "--run-id", "run-high-risk")
         self.assertIn("risk=high", status.stdout)
         self.assertIn("shared=README.md", status.stdout)
+        self.assertIn("deep_review_required=yes", status.stdout)
         lane_text = self.lane_file("run-high-risk").read_text(encoding="utf-8")
         self.lane_file("run-high-risk").write_text(lane_text.replace("Risk Level: high", "Risk Level: standard"), encoding="utf-8")
 
@@ -777,7 +816,7 @@ class XStateWorkflowTests(XStateTestCase):
         self.assertNotEqual(failed.returncode, 0)
         self.assertIn("ready review cannot include blocking findings", failed.stderr + failed.stdout)
 
-    def test_three_non_ready_reviews_require_architect_loopback(self) -> None:
+    def test_second_non_ready_review_requires_architect_loopback(self) -> None:
         self.prepare_materialized_run("run-loopback", "loopback")
         self.x(
             "attempt-start",
@@ -803,19 +842,177 @@ class XStateWorkflowTests(XStateTestCase):
             "--residual-risk",
             "Needs review.",
         )
-        for index in range(1, 4):
+        self.x(
+            "review",
+            "--run-id",
+            "run-loopback",
+            "--attempt-id",
+            "task-llm-a1",
+            "--review-id",
+            "review-loop-1",
+            "--title",
+            "Loop review 1",
+            "--summary",
+            "Still wrong.",
+            "--recommendation",
+            "changes-requested",
+            "--loopback-target",
+            "engineer",
+            "--blocking-findings",
+            "- Marker is wrong.",
+            "--reviewed-diff",
+            "README diff reviewed.",
+            "--verification",
+            "Verification insufficient.",
+        )
+        first_review = self.review_file("review-loop-1").read_text(encoding="utf-8")
+        self.assertIn("Loopback Target: engineer", first_review)
+
+        self.x(
+            "attempt-start",
+            "--task-id",
+            "task-llm",
+            "--kind",
+            "fix",
+            "--source-review-id",
+            "review-loop-1",
+            "--attempt-id",
+            "task-llm-a2",
+            "--title",
+            "First fix",
+        )
+        (self.lane_worktree("loopback") / "README.md").write_text("# repo\n\nstill wrong marker\n", encoding="utf-8")
+        self.x(
+            "attempt-result",
+            "--attempt-id",
+            "task-llm-a2",
+            "--changed-files",
+            "README.md",
+            "--summary",
+            "Marker still wrong.",
+            "--verification",
+            "Inspected README.",
+            "--residual-risk",
+            "Needs architect loopback.",
+        )
+        self.x(
+            "review",
+            "--run-id",
+            "run-loopback",
+            "--attempt-id",
+            "task-llm-a2",
+            "--review-id",
+            "review-loop-2",
+            "--title",
+            "Loop review 2",
+            "--summary",
+            "Still wrong.",
+            "--recommendation",
+            "changes-requested",
+            "--loopback-target",
+            "engineer",
+            "--blocking-findings",
+            "- Marker is wrong.",
+            "--reviewed-diff",
+            "README diff reviewed.",
+            "--verification",
+            "Verification insufficient.",
+        )
+        second_review = self.review_file("review-loop-2").read_text(encoding="utf-8")
+        self.assertIn("Loopback Target: architect", second_review)
+        run_text = self.run_file("run-loopback").read_text(encoding="utf-8")
+        self.assertIn("Needs User: yes", run_text)
+        self.assertIn("Loop back to architect/root", run_text)
+        blocked_fix = self.x(
+            "attempt-start",
+            "--task-id",
+            "task-llm",
+            "--kind",
+            "fix",
+            "--source-review-id",
+            "review-loop-2",
+            "--attempt-id",
+            "task-llm-a3",
+            "--title",
+            "Blocked direct fix",
+            check=False,
+        )
+        self.assertNotEqual(blocked_fix.returncode, 0)
+        self.assertIn("latest unresolved review review-loop-2 loops to architect", blocked_fix.stderr + blocked_fix.stdout)
+
+        self.x(
+            "architect-directive",
+            "--run-id",
+            "run-loopback",
+            "--lane-id",
+            "lane-llm",
+            "--title",
+            "Architect permits targeted fix",
+            "--target",
+            "lane",
+            "--action",
+            "continue",
+            "--summary",
+            "Engineer may perform the narrow marker fix.",
+            "--instructions",
+            "Start one targeted fix attempt from review-loop-2.",
+            "--acceptance",
+            "Fix attempt stays within README marker scope.",
+        )
+        self.x(
+            "attempt-start",
+            "--task-id",
+            "task-llm",
+            "--kind",
+            "fix",
+            "--source-review-id",
+            "review-loop-2",
+            "--attempt-id",
+            "task-llm-a3",
+            "--title",
+            "Architect-directed fix",
+        )
+
+    def test_ready_review_clears_architect_loopback_fix_block(self) -> None:
+        self.prepare_materialized_run("run-ready-clears", "ready-clears")
+        self.x(
+            "attempt-start",
+            "--task-id",
+            "task-llm",
+            "--kind",
+            "implementation",
+            "--attempt-id",
+            "task-llm-a1",
+            "--title",
+            "Implement marker",
+        )
+        (self.lane_worktree("ready-clears") / "README.md").write_text("# repo\n\nwrong marker\n", encoding="utf-8")
+        self.x(
+            "attempt-result",
+            "--attempt-id",
+            "task-llm-a1",
+            "--changed-files",
+            "README.md",
+            "--summary",
+            "Wrong marker.",
+            "--verification",
+            "Inspected README.",
+            "--residual-risk",
+            "Needs review.",
+        )
+        for index in range(1, 3):
             self.x(
                 "review",
                 "--run-id",
-                "run-loopback",
+                "run-ready-clears",
                 "--attempt-id",
                 "task-llm-a1",
                 "--review-id",
-                f"review-loop-{index}",
+                f"review-ready-clears-{index}",
                 "--title",
-                f"Loop review {index}",
+                f"Review {index}",
                 "--summary",
-                "Still wrong.",
+                "Needs changes.",
                 "--recommendation",
                 "changes-requested",
                 "--loopback-target",
@@ -827,11 +1024,34 @@ class XStateWorkflowTests(XStateTestCase):
                 "--verification",
                 "Verification insufficient.",
             )
-        third_review = self.review_file("review-loop-3").read_text(encoding="utf-8")
-        self.assertIn("Loopback Target: architect", third_review)
-        run_text = self.run_file("run-loopback").read_text(encoding="utf-8")
-        self.assertIn("Needs User: yes", run_text)
-        self.assertIn("Loop back to architect/root", run_text)
+        sys.path.insert(0, str(ROOT / "skill/scripts"))
+        from x_state_commands import engineer_fix_loopback_failures
+
+        old_x_home = os.environ.get("X_HOME")
+        os.environ["X_HOME"] = str(self.x_home)
+        self.addCleanup(lambda: os.environ.pop("X_HOME", None) if old_x_home is None else os.environ.__setitem__("X_HOME", old_x_home))
+        lane = self.lane_file("run-ready-clears")
+        self.assertTrue(engineer_fix_loopback_failures(self.repo, "run-ready-clears", "task-llm", lane))
+        self.x(
+            "review",
+            "--run-id",
+            "run-ready-clears",
+            "--attempt-id",
+            "task-llm-a1",
+            "--review-id",
+            "review-ready-clears-3",
+            "--title",
+            "Ready review",
+            "--summary",
+            "Ready.",
+            "--recommendation",
+            "ready",
+            "--reviewed-diff",
+            "README diff reviewed.",
+            "--verification",
+            "Verification sufficient.",
+        )
+        self.assertEqual(engineer_fix_loopback_failures(self.repo, "run-ready-clears", "task-llm", lane), [])
 
     def test_multiple_active_runs_require_explicit_run_id_from_control_root(self) -> None:
         self.x("start", "--run-id", "run-one", "--goal", "One")

@@ -15,12 +15,9 @@ $x checkpoint              write a progress checkpoint
 $x close                   close with gates and recommendation
 
 $x discussion: <topic>     discuss direction before architecture
-$x council: <topic>        synthesize multiple role views
-$x company-council: <topic> founder/cto/product-lead/growth/challenger room
+$x council: <topic>        founder/cto/product-lead/market-intelligence/gtm/challenger room
+$x council with <roles>: <topic> discuss with selected roles
 $x with <role>: <question> ask one configured role
-$x product: <question>     discuss product shape and user path
-$x technical: <question>   discuss technical boundary and risk
-$x strategy: <question>    discuss priority, sequencing, and stop conditions
 $x challenger: <question>  challenge assumptions
 ```
 
@@ -30,7 +27,7 @@ Users talk to `$x`. The bundled `x_state.py` script is internal plumbing for rec
 
 `x` keeps architecture, execution, review, and close decisions explicit:
 
-- Turns product, technical, strategy, founder, CTO, product-lead, growth, challenger, council, or architect discussion into durable direction.
+- Turns founder, CTO, product-lead, market-intelligence, GTM, challenger, council, or custom-role discussion into durable direction.
 - Records root decisions before treating discussion output as accepted work.
 - Converts accepted direction into an Architecture Brief, Technical Contract, and Architect Execution Plan.
 - Splits implementation into lane worktrees with scoped ownership and verification expectations.
@@ -43,7 +40,7 @@ Users talk to `$x`. The bundled `x_state.py` script is internal plumbing for rec
 
 _Rooms shape direction; lanes run implementation, code review, and fix-pass loops; architect directives and `merge-ok` control the path to the merge-ready gate._
 
-Direction work happens before architecture when root wants to shape or challenge a direction. The visible room keeps role identity clear, for example product, technical, strategy, founder, CTO, product-lead, growth, challenger, architect, and main. Room output is summarized as `Room Essence` so main can later draft a BRD, PRD, strategy document, sales strategy, or architect intake from the same advisory source.
+Direction work happens before architecture when root wants to shape or challenge a direction. The visible room keeps role identity clear, for example founder, CTO, product-lead, market-intelligence, GTM, challenger, custom roles, and main. Room output is summarized as `Room Essence` so main can later draft a BRD, PRD, strategy document, sales strategy, or architect intake from the same advisory source.
 
 The architect room turns accepted direction into execution boundaries. After root accepts the Architecture Brief, `x` materializes an integration worktree and requires a gated Architect Execution Plan before any lane work starts.
 
@@ -123,7 +120,7 @@ python ~/.codex/skills/x/scripts/x_state.py cleanup-worktrees --run-id <run-id> 
 - `status` reports the current project and run state.
 - `audit` produces a read-only run report unless `--write` is passed.
 - `cleanup-worktrees` removes only clean, integrated, registered lane worktrees when `--apply` is passed.
-- `package --role reviewer --reviewer-backend codex-native` runs native `codex review` from the lane worktree and records the resulting review without embedding the full raw diff in a package.
+- Recommended reviewer handoff: `package --role reviewer --reviewer-backend codex-native` runs native `codex review` from the lane worktree and records the resulting review without embedding the full raw diff in a package. The CLI default remains `package` for compatibility.
 
 Most other `x_state.py` commands are workflow internals used by the `$x` skill to record interactions, briefs, plans, packages, reviews, directives, decisions, risks, gates, and close records.
 

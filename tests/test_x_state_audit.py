@@ -131,3 +131,89 @@ class XStateAuditTests(XStateTestCase):
         self.assertEqual(audit["written_path"], str(audit_file))
         self.assertTrue(audit_file.exists())
         self.assertIn("# x Run Audit: run-audit-write", audit_file.read_text(encoding="utf-8"))
+
+    def test_audit_reports_bottlenecks_without_removing_existing_fields(self) -> None:
+        self.x("start", "--run-id", "run-audit-bottlenecks", "--goal", "Audit bottlenecks")
+        self.accept_brief("run-audit-bottlenecks")
+        self.create_contract_and_task("run-audit-bottlenecks")
+        self.x("materialize", "--run-id", "run-audit-bottlenecks", "--scope", "audit-bottlenecks")
+        self.create_execution_plan(
+            "run-audit-bottlenecks",
+            parallel_lanes=self.execution_plan_lane_table(risk_level="high", shared_files="README.md"),
+        )
+        self.x("architect-gate", "--run-id", "run-audit-bottlenecks")
+        self.x("lane-start", "--run-id", "run-audit-bottlenecks", "--lane-id", "lane-llm", "--task-id", "task-llm")
+        architect_package = self.create_package("run-audit-bottlenecks", "pkg-architect", role="architect")
+        self.x("attempt-start", "--task-id", "task-llm", "--kind", "implementation", "--attempt-id", "task-llm-a1", "--title", "Attempt")
+        (self.lane_worktree("audit-bottlenecks") / "README.md").write_text("# repo\n\nwrong marker\n", encoding="utf-8")
+        self.x("attempt-result", "--attempt-id", "task-llm-a1", "--changed-files", "README.md", "--summary", "Wrong marker.", "--verification", "Inspected README.", "--residual-risk", "Needs review.")
+        self.x("package", "--role", "reviewer", "--run-id", "run-audit-bottlenecks", "--task-id", "task-llm", "--attempt-id", "task-llm-a1", "--package-id", "pkg-reviewer")
+        reviewer_package = self.package_file("pkg-reviewer")
+        for index in range(1, 3):
+            self.x(
+                "review",
+                "--run-id",
+                "run-audit-bottlenecks",
+                "--attempt-id",
+                "task-llm-a1",
+                "--review-id",
+                f"review-audit-{index}",
+                "--title",
+                f"Audit review {index}",
+                "--summary",
+                "Still wrong.",
+                "--recommendation",
+                "changes-requested",
+                "--loopback-target",
+                "engineer",
+                "--blocking-findings",
+                "- Marker is wrong.",
+                "--reviewed-diff",
+                "README diff reviewed.",
+                "--verification",
+                "Verification insufficient.",
+            )
+        self.x(
+            "architect-directive",
+            "--run-id",
+            "run-audit-bottlenecks",
+            "--lane-id",
+            "lane-llm",
+            "--title",
+            "Permit fix",
+            "--target",
+            "lane",
+            "--action",
+            "continue",
+            "--summary",
+            "Permit one fix.",
+            "--instructions",
+            "Start one fix attempt.",
+            "--acceptance",
+            "Stay inside README.",
+        )
+        self.x("attempt-start", "--task-id", "task-llm", "--kind", "fix", "--source-review-id", "review-audit-2", "--attempt-id", "task-llm-a2", "--title", "Active fix")
+        codex_state = self.create_codex_state(
+            [
+                ("thread-architect", "Architect", f"Use {architect_package}", 100),
+                ("thread-reviewer", "Reviewer", f"Use {reviewer_package}", 250),
+            ]
+        )
+
+        audit = self.audit_json("run-audit-bottlenecks", codex_state)
+
+        self.assertIn("run", audit)
+        self.assertIn("engineering_scale", audit)
+        self.assertIn("flow", audit)
+        self.assertIn("tokens", audit)
+        self.assertIn("bottlenecks", audit)
+        self.assertEqual(audit["flow"]["deep_review_required_lanes"], 1)
+        self.assertEqual(audit["tokens"]["tokens_by_role"], {"architect": 100, "reviewer": 250})
+        role_load = {item["role"]: item for item in audit["bottlenecks"]["role_load"]}
+        self.assertEqual(role_load["architect"], {"role": "architect", "packages": 1, "tokens": 100})
+        self.assertEqual(role_load["reviewer"], {"role": "reviewer", "packages": 1, "tokens": 250})
+        self.assertEqual(audit["bottlenecks"]["largest_token_packages"][0]["package_id"], "pkg-reviewer")
+        self.assertEqual(audit["bottlenecks"]["repeated_non_ready_tasks"][0]["non_ready_reviews"], 2)
+        self.assertEqual(audit["bottlenecks"]["active_attempts_without_result"][0]["attempt_id"], "task-llm-a2")
+        self.assertEqual(audit["bottlenecks"]["stale_or_missing_heartbeat_lanes"][0]["attention"], "no-heartbeat")
+        self.assertEqual(audit["bottlenecks"]["deep_review_required_lanes"][0]["lane_id"], "lane-llm")
