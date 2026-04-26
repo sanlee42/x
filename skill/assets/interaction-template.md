@@ -17,7 +17,7 @@ Participants: {participants}
 
 -
 
-## Role Briefs
+## Participant Briefs
 
 -
 
@@ -43,4 +43,4 @@ Pending.
 
 ## Event Log
 
-- {created_at}: discussion created.
+- {created_at}: interaction created.

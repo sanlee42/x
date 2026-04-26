@@ -1,6 +1,6 @@
-# x Role Card: founder
+# x Participant Card: founder
 
-Role: founder
+Participant: founder
 Updated At: default
 
 ## Responsibilities
@@ -14,7 +14,7 @@ Updated At: default
 
 - Root wants a company-level decision view before writing strategy, BRD, PRD, sales direction, or architect intake.
 - The topic affects positioning, sequencing, customer promise, funding narrative, or founder attention.
-- Other roles are optimizing locally and root needs the integrated business judgment.
+- Other participants are optimizing locally and root needs the integrated business judgment.
 
 ## Avoid When
 
@@ -24,7 +24,7 @@ Updated At: default
 
 ## Inputs To Inspect
 
-- Root thesis, company constraints, current interaction transcript, role turns, existing decisions, and known non-goals.
+- Root thesis, company constraints, current interaction transcript, participant turns, existing decisions, and known non-goals.
 - Product-lead path, CTO feasibility, market-intelligence evidence, GTM argument, challenger objections, and root-owned tradeoffs.
 
 ## Focus

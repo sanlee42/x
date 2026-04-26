@@ -1,28 +1,24 @@
 # Root Interaction Design
 
-This document describes the root-facing interaction layer above the current `x` architect-to-code loop. `discussion` remains acceptable root-facing language and a compatibility command prefix, but the underlying concept is an `interaction`: one or more configurable roles challenge a root thesis, respond to each other, and help main produce a proposal.
+This document describes the root-facing council room layer above the current `x` architect-to-code loop. The only root-facing room entry is `$x council`; the underlying durable record is an `interaction`.
 
 The active flow is:
 
 ```text
-root interaction -> optional role briefs -> interaction summary/proposal -> root decision -> architect intake
+council room -> optional participant briefs -> Room Essence -> root decision -> architect intake
   -> Architecture Brief -> Technical Contract -> Architect Execution Plan
   -> lanes -> reviews -> merge-back recommendation
 ```
 
 The design keeps `x` generic. Product-specific policy still belongs in the target repository's `PROJECT_CONSTRAINTS.md`, `AGENTS.md`, and `.x/project/profile.md`.
 
-Interactions are visible conversations first. `$x with <role>`, `$x council`, and `$x council with <role1>, <role2>` all use the same `interaction-start -> interaction-turn -> interaction-summarize -> decision/intake` state path. Main must show root the actual role turns as the normal assistant response and must record those turns with speaker and audience metadata. A synthesis/proposal is a later artifact; it must not replace the conversation transcript.
-
-An active interaction is a room, not a one-shot answer. After root starts a room, main keeps routing follow-up natural language into that same room until root explicitly asks to synthesize, decide, close, supersede, or switch rooms. Main may add facilitator notes, but it must not silently collapse back into unlabeled main-agent conversation.
-
 ## Intent
 
-Root-facing interaction preserves why a direction was chosen, what tradeoffs were rejected, which assumptions were challenged, what root decided, and what the architect may use as decision-complete input. It must not turn root into the manager of engineer and reviewer sessions.
+Council rooms preserve why a direction was chosen, what tradeoffs were rejected, which assumptions were challenged, what root decided, and what the architect may use as decision-complete input. They must not turn root into the manager of engineer and reviewer sessions.
 
-Root still primarily talks to main in natural language. Main records durable state, reads role cards, generates role packages when useful, synthesizes conflicts, asks root for decisions, and hands accepted architect intake to the existing architect room. The CLI is main's state tool, not root's day-to-day interface.
+Root still primarily talks to main in natural language. Main records durable state, reads participant cards, generates participant packages when useful, synthesizes conflicts, asks root for decisions, and hands accepted architect intake to the existing architect room. The CLI is main's state tool, not root's day-to-day interface.
 
-## Roles
+## Participants
 
 - `root`: final authority for direction, priority, irreversible decisions, and merge authorization.
 - `main`: interaction facilitator, state recorder, synthesis/proposal writer, and package creator.
@@ -31,118 +27,105 @@ Root still primarily talks to main in natural language. Main records durable sta
 - `product-lead`: product leadership view for customer problem, v1 promise, product claims, and document-safe scope.
 - `market-intelligence`: competitors, substitutes, market structure, customer evidence, pricing and packaging facts, and category dynamics. It informs the room; it does not decide.
 - `gtm`: channel, sales motion, launch path, conversion, pricing action, packaging implications, and adoption risk.
-- `architect`: execution architect. Converts accepted architect intake into Architecture Brief, Technical Contract, Architect Execution Plan, lane integration policy, and root-facing checkpoints.
-- `challenger`: optional role view for high-risk or root-requested critique.
-- `engineer` and `reviewer`: remain lower-layer execution roles and are not managed by interaction roles.
+- `challenger`: critique, pre-mortem, weakest assumptions, and disconfirming evidence.
 
-Interaction role views must not directly create Engineer Tasks, start attempts, manage lanes, assign reviewers, or issue architect directives. They produce turns, optional formal role briefs, and findings for root and architect.
+Council participant views must not directly create Engineer Tasks, start attempts, manage lanes, assign reviewers, or issue architect directives. They produce visible turns, optional formal participant briefs, and findings for root and architect.
 
-## Role Cards
+## Participant Cards
 
-Roles are configurable markdown cards under runtime state:
+Participants are configurable markdown cards under runtime state:
 
 ```text
-~/.x/projects/<project-key>/roles/<role>.md
+~/.x/projects/<project-key>/participants/<participant>.md
 ```
 
-Default role-card templates are provided for `founder`, `cto`, `product-lead`, `market-intelligence`, `gtm`, and `challenger`. No compatibility aliases are provided for earlier interaction role names. These interaction role cards are distinct from the installed execution agent prompts under `~/.codex/agents/`. Council and interaction turns should not expect global `founder.toml`, `cto.toml`, `product-lead.toml`, `market-intelligence.toml`, `gtm.toml`, `challenger.toml`, or `councilor.toml` files; those roles are loaded from markdown role cards.
+Default participant-card templates are provided for `founder`, `cto`, `product-lead`, `market-intelligence`, `gtm`, and `challenger`. These cards are distinct from installed execution agent prompts under `~/.codex/agents/`; council turns should not expect participant `.toml` files.
 
-Root can ask main to add or modify roles such as `ops`, `data`, `support`, or `finance`; main records them with:
+Main can inspect or configure participant cards with:
 
 ```bash
-python ~/.codex/skills/x/scripts/x_state.py role-list
-python ~/.codex/skills/x/scripts/x_state.py role-show product-lead
-python ~/.codex/skills/x/scripts/x_state.py role-set ops --body-file ops-role.md
+python ~/.codex/skills/x/scripts/x_state.py participant-list
+python ~/.codex/skills/x/scripts/x_state.py participant-show product-lead
+python ~/.codex/skills/x/scripts/x_state.py participant-set ops --body-file ops-participant.md
 ```
 
-Each role card should cover responsibilities, use/avoid conditions, inputs to inspect, focus, must-challenge questions, operating posture, evidence standard, handoff value, failure modes, out-of-bounds behavior, and output format. Role outputs may use role-specific formats, but must still include stance, reasons, objections, weakest assumption, evidence that would change the stance, and questions needing root decision.
+Participant cards should cover responsibilities, use/avoid conditions, inputs to inspect, focus, must-challenge questions, operating posture, evidence standard, handoff value, failure modes, out-of-bounds behavior, and output format.
 
 ## Interaction Modes
 
-Use `interaction-start --mode with` when root wants one role view:
-
-```bash
-python ~/.codex/skills/x/scripts/x_state.py interaction-start --mode with --title "CTO direction" --agenda "Evaluate reusable read contracts" --participants cto
-```
-
-Root-facing `$x with <role>: <question>` maps to this path, using the requested role as the single participant.
-
-Use `interaction-start --mode joint` when root and several roles should share one meeting record:
-
-```bash
-python ~/.codex/skills/x/scripts/x_state.py interaction-start --mode joint --title "Direction alignment" --agenda "Align product, technical, and GTM direction" --participants product-lead cto gtm
-python ~/.codex/skills/x/scripts/x_state.py interaction-turn --interaction-id "<interaction-id>" --actor root --to all --turn-kind statement --body "<root thesis>"
-python ~/.codex/skills/x/scripts/x_state.py interaction-turn --interaction-id "<interaction-id>" --actor product-lead --to all --turn-kind viewpoint --body "<product-lead turn>"
-```
-
-Use the `council` participant preset when root asks for `$x council: <topic>` or an equivalent company decision room:
+Root-facing `$x council: <topic>` uses the default participant roster:
 
 ```bash
 python ~/.codex/skills/x/scripts/x_state.py interaction-start --mode joint --title "Company council" --agenda "<topic>" --participants council
 ```
 
-This expands to `founder`, `cto`, `product-lead`, `market-intelligence`, `gtm`, and `challenger`. The preset is only a room roster shortcut; it does not create a separate workflow or grant company roles execution authority. `council` is reserved as a preset name and cannot be registered as an interaction role.
+The `council` preset expands to `founder`, `cto`, `product-lead`, `market-intelligence`, `gtm`, and `challenger`. It is only a room roster shortcut and does not create a separate workflow or grant company participants execution authority. `council` is reserved and cannot be registered as a participant.
 
-Use explicit participants when root asks for `$x council with founder, gtm, challenger: <topic>` or another selected-role council:
+Root-facing `$x council with founder, gtm, challenger: <topic>` uses explicit participants:
 
 ```bash
 python ~/.codex/skills/x/scripts/x_state.py interaction-start --mode joint --title "Selected council" --agenda "<topic>" --participants founder gtm challenger
 ```
 
-Use `interaction-start --mode independent` when root needs unpolluted first-pass role views:
+Single-participant rooms use the same syntax and mode:
 
 ```bash
-python ~/.codex/skills/x/scripts/x_state.py interaction-start --mode independent --title "Direction choice" --agenda "Compare next initiative options" --participants founder cto product-lead
-python ~/.codex/skills/x/scripts/x_state.py package --role councilor --interaction-id "<interaction-id>" --council-role cto
+python ~/.codex/skills/x/scripts/x_state.py interaction-start --mode joint --title "CTO direction" --agenda "<question>" --participants cto
 ```
 
-Independent synthesis requires a `ready` role brief for every participant. Unresolved conflicts must be surfaced to root instead of being silently resolved by architect.
+Use `interaction-start --mode independent` only when root needs unpolluted first-pass participant views:
 
-The legacy `discussion-start`, `discussion-turn`, and `discussion-synthesize` commands remain compatible wrappers for existing state.
+```bash
+python ~/.codex/skills/x/scripts/x_state.py interaction-start --mode independent --title "Direction choice" --agenda "<topic>" --participants founder cto product-lead
+python ~/.codex/skills/x/scripts/x_state.py package --role councilor --interaction-id "<interaction-id>" --participant cto
+```
+
+Independent synthesis requires a `ready` participant brief for every participant. Unresolved conflicts must be surfaced to root instead of being silently resolved by architect.
 
 ## Durable State
 
 Interaction state is explicit markdown under `~/.x/projects/<project-key>/`:
 
 ```text
-discussions/<discussion-id>.md
-role-briefs/<brief-id>.md
+interactions/<interaction-id>.md
+participant-briefs/<brief-id>.md
 architect-intakes/<intake-id>.md
-roles/<role>.md
+participants/<participant>.md
 boards/current.md
 ```
 
 Existing `decisions/<decision-id>.md` remains the source of root authority.
 
-The interaction file's `Turns` section is the canonical transcript. Each turn includes an actor, turn kind, audience (`To:`), and body. Recording a turn prints the current transcript so root can see the process without running a separate show command. `interaction-show` / `discussion-show` exist for resume/debug reads, not as a required user step.
+The interaction file's `Turns` section is the canonical transcript. Each turn includes an actor, turn kind, audience (`To:`), and body. Recording a turn prints the current transcript so root can see the process without running a separate show command. `interaction-show` exists for resume/debug reads.
 
-The transcript renderer includes a room roster:
+Root-facing assistant responses should mirror this shape:
 
 ```text
-root: direction owner
-main: facilitator and recorder
-<role>: active role view
+Room: <interaction-id>
+Participants: root, main, founder, cto, ...
+Speaking:
+- founder -> root: ...
+- cto -> founder/all: ...
+- main -> root: facilitator note only, if needed.
 ```
-
-Root-facing assistant responses should mirror this shape with labeled lines such as `product-lead -> root:` or `cto -> founder/all:`. This prevents the user from losing track of who is speaking.
 
 Precedence:
 
 ```text
-root decision > accepted architect intake > accepted Architecture Brief > role brief > interaction turn
+root decision > accepted architect intake > accepted Architecture Brief > participant brief > interaction turn
 ```
 
 Record meanings:
 
-- `interaction`: agenda/root thesis, participants, compressed turns, linked role briefs, `Room Essence` in synthesis/proposal, linked architect intake, linked root decisions, and packages.
-- `role brief`: one role's formal view: recommendation, rationale, rejected options, risks, decisions needed, implications for architect, and required challenge fields.
-- `decision`: root's accepted decision and its consequences, optionally linked to an interaction and architect intake.
+- `interaction`: agenda/root thesis, participants, compressed turns, linked participant briefs, `Room Essence`, linked architect intake, linked root decisions, and packages.
+- `participant brief`: one participant's formal view: recommendation, rationale, rejected options, risks, decisions needed, implications for architect, and required challenge fields.
+- `decision`: root's accepted decision and consequences, optionally linked to an interaction and architect intake.
 - `architect intake`: decision-complete input architect may use to create or revise Architecture Brief and Execution Plan.
 - `board`: generated root-facing summary across active interactions, accepted intakes, root decisions, active runs, and risks.
 
 ## Room Essence
 
-Every `with`, selected-role council, default council, independent council, or ordinary root-facing interaction resolves into one `Room Essence` inside the existing interaction `Synthesis` section. It is the shared advisory source that main can later use to write a BRD, PRD, strategy document, sales strategy, or architect intake draft.
+Every default council, selected-participant council, single-participant council, or independent room resolves into one `Room Essence` inside the existing interaction `Synthesis` section. It is the shared advisory source that main can later use to write a BRD, PRD, strategy document, sales strategy, or architect intake draft.
 
 Required fields:
 
@@ -160,86 +143,30 @@ The `Room Essence` is not a root decision. It becomes execution-relevant only af
 
 ## Challenger Requirement
 
-Challenger thinking is required in every role brief and interaction summary. Role briefs keep explicit challenge fields; interaction summaries carry them into `Room Essence`, with strongest objection folded into objections/conflicts. The required challenge fields are:
+Challenger thinking is required in every participant brief and interaction summary. Participant briefs keep explicit challenge fields; interaction summaries carry them into `Room Essence`, with strongest objection folded into objections/conflicts.
+
+Required challenge fields:
 
 - strongest objection
 - weakest assumption
 - evidence that would change the recommendation
 
-`challenger` is a normal optional role card that can be invited into any interaction. Other roles must still include challenger fields in their formal conclusions.
+## Implemented V1
 
-## Root Board
-
-`board` prints a derived root-facing observation surface:
-
-```bash
-python ~/.codex/skills/x/scripts/x_state.py board
-python ~/.codex/skills/x/scripts/x_state.py board --write
-```
-
-The board is not a second source of truth. It summarizes active interactions, accepted architect intakes, root decisions, active runs, and risks from existing state files.
-
-## Acceptance/QA
-
-Acceptance is still separate from code review, but full Acceptance/QA gates are not implemented in interaction v1.
-
-Reviewer checks:
-
-- code correctness
-- contract compliance
-- diff scope
-- test relevance
-
-Future Acceptance checks:
-
-- product or business intent
-- user path
-- acceptance evidence
-- explainability of unsupported or unresolved cases
-- docs, examples, smoke output, or API/report evidence
-- residual risk that root must understand
-
-Future Acceptance `changes-requested` must return to architect. Acceptance must not directly assign engineer work. Architect decides whether the response is a fix lane, replan, product scope change, or root decision.
-
-## Roadmap
-
-### Done: Stabilized Execution Foundation
-
-- Lane state is scoped by run.
-- `attempt-start` rejects integrated or inactive lanes.
-- Latest attempt/review selection handles numbered attempts deterministically.
-- Merge-ready requires recorded final verification evidence.
-- Mailbox messages provide lightweight role/main coordination for active execution.
-
-### Implemented V1: Root Interaction
-
-- `interaction-start`, `interaction-turn`, `interaction-summarize`, plus compatibility `discussion-start`, `discussion-turn`, `discussion-synthesize`, `role-brief`, `architect-intake`, and `board`.
-- Configurable role cards with defaults for `founder`, `cto`, `product-lead`, `market-intelligence`, `gtm`, and `challenger`.
+- `interaction-start`, `interaction-turn`, `interaction-summarize`, `participant-brief`, `architect-intake`, and `board`.
+- Configurable participant cards with defaults for `founder`, `cto`, `product-lead`, `market-intelligence`, `gtm`, and `challenger`.
 - `council` participant preset for `founder`, `cto`, `product-lead`, `market-intelligence`, `gtm`, and `challenger`.
-- `package --role councilor --interaction-id ... --council-role ...` for role brief inputs.
+- `package --role councilor --interaction-id ... --participant ...` for participant brief inputs.
 - `decision` links to interaction and architect intake.
 - Accepted architect intake requires an accepted root decision.
 - Architect packages require `--architect-intake-id` when multiple accepted architect intakes exist.
-- Closed or superseded interactions reject new turns, role briefs, summaries, decisions, packages, and architect intakes.
-- Reserved role names such as `root`, `main`, `engineer`, `reviewer`, `councilor`, and `council` cannot be registered as configurable interaction roles.
-
-### Future: Acceptance Gate
-
-- Acceptance plan from product intent and architect intake.
-- Acceptance review record.
-- Merge-ready gate requires accepted acceptance review when an acceptance plan exists.
-- Acceptance `changes-requested` routes back through architect.
-
-### Future: Multi-Direction Board
-
-- Direction-level state across multiple active initiatives.
-- Explicit dependencies between directions.
-- Close/reopen rules for direction-level state.
+- Closed or superseded interactions reject new turns, participant briefs, summaries, decisions, packages, and architect intakes.
+- Reserved participant names such as `root`, `main`, `engineer`, `reviewer`, `councilor`, and `council` cannot be registered as configurable interaction participants.
 
 ## Non-Goals
 
 - Do not introduce external services, GitHub, Notion, or MCP dependencies for this layer.
-- Do not make interaction roles permanent requirements for small tasks.
-- Do not let upper-layer roles bypass architect and manage engineer/reviewer directly.
-- Do not store only raw chat logs as durable state; always produce compressed, role-scoped records.
-- Do not add role-specific overlay files until a second real project proves the need.
+- Do not make council rooms mandatory for small tasks.
+- Do not let council participants bypass architect and manage engineer/reviewer directly.
+- Do not store only raw chat logs as durable state; always produce compressed, participant-scoped records.
+- Do not add participant-specific overlay files until a second real project proves the need.

@@ -8,16 +8,16 @@ from pathlib import Path
 from x_state_common import *
 
 
-DISCUSSION_MODES = ("with", "joint", "independent")
+DISCUSSION_MODES = ("joint", "independent")
 DISCUSSION_STATUSES = ("active", "synthesized", "closed", "superseded")
 DISCUSSION_TURN_KINDS = ("statement", "question", "viewpoint", "challenge", "critique", "response", "summary", "decision-candidate")
-ROLE_BRIEF_STATUSES = ("draft", "ready", "superseded")
+PARTICIPANT_BRIEF_STATUSES = ("draft", "ready", "superseded")
 ARCHITECT_INTAKE_STATUSES = ("draft", "accepted", "superseded")
-ROLE_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
+PARTICIPANT_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 PARTICIPANT_PRESETS = {
     "council": ("founder", "cto", "product-lead", "market-intelligence", "gtm", "challenger"),
 }
-RESERVED_ROLE_NAMES = {"root", "main", "engineer", "reviewer", "councilor", *PARTICIPANT_PRESETS}
+RESERVED_PARTICIPANT_NAMES = {"root", "main", "engineer", "reviewer", "councilor", *PARTICIPANT_PRESETS}
 
 
 def command_discussion_start(args: argparse.Namespace) -> None:
@@ -25,10 +25,11 @@ def command_discussion_start(args: argparse.Namespace) -> None:
     participants = normalized_participants(root, args.participants)
     validate_mode_participants(args.mode, participants)
     run_id = resolve_run(root, args.run_id).stem if args.run_id else "none"
-    discussion_id = args.discussion_id or f"{today()}-{slug(args.title, 'discussion')}"
-    discussion_path = unique_path(state_dirs(root)["discussions"], discussion_id)
+    interaction_id = getattr(args, "interaction_id", None)
+    discussion_id = interaction_id or f"{today()}-{slug(args.title, 'interaction')}"
+    discussion_path = unique_path(state_dirs(root)["interactions"], discussion_id)
     created_at = now()
-    content = read_template(DISCUSSION_TEMPLATE).format(
+    content = read_template(INTERACTION_TEMPLATE).format(
         discussion_id=discussion_path.stem,
         status=args.status,
         mode=args.mode,
@@ -70,7 +71,7 @@ def command_discussion_turn(args: argparse.Namespace) -> None:
     if header_value(text, "Status") == "synthesized":
         text = replace_line(text, "Status: ", "active")
     text = replace_line(text, "Updated At: ", timestamp)
-    text = append_event_text(text, f"discussion turn recorded: {actor}/{args.turn_kind}")
+    text = append_event_text(text, f"interaction turn recorded: {actor}/{args.turn_kind}")
     save(discussion, text, args.dry_run)
     if not args.dry_run:
         print()
@@ -93,7 +94,7 @@ def render_discussion_transcript(discussion: Path, text: str) -> str:
         if line.startswith(("Status:", "Mode:", "Created At:", "Updated At:", "Linked Run:", "Participants:")):
             lines.append(line)
     lines.extend(["", "## Room Roster", "", room_roster(text)])
-    for heading in ("Agenda", "Turns", "Role Briefs", "Synthesis", "Current Summary"):
+    for heading in ("Agenda", "Turns", "Participant Briefs", "Synthesis", "Current Summary"):
         content = section_content(text, heading)
         lines.extend(["", f"## {heading}", "", content or "-"])
     return "\n".join(lines).rstrip() + "\n"
@@ -105,21 +106,21 @@ def room_roster(text: str) -> str:
         "- root: direction owner",
         "- main: facilitator and recorder",
     ]
-    lines.extend(f"- {participant}: active role view" for participant in participants)
+    lines.extend(f"- {participant}: active participant view" for participant in participants)
     return "\n".join(lines)
 
 
 def command_role_brief(args: argparse.Namespace) -> None:
     root = repo_root(Path.cwd())
     discussion = resolve_discussion(root, require_discussion_arg(args))
-    require_interaction_writable(discussion, "record role briefs")
+    require_interaction_writable(discussion, "record participant briefs")
     role = normalize_role_reference(root, args.role)
     validate_actor_for_discussion(discussion, role)
     require_challenge_fields(args)
-    brief_id = args.brief_id or f"{today()}-{slug(args.role + '-' + args.title, 'role-brief')}"
-    brief_path = unique_path(state_dirs(root)["role-briefs"], brief_id)
+    brief_id = args.brief_id or f"{today()}-{slug(args.role + '-' + args.title, 'participant-brief')}"
+    brief_path = unique_path(state_dirs(root)["participant-briefs"], brief_id)
     created_at = now()
-    content = read_template(ROLE_BRIEF_TEMPLATE).format(
+    content = read_template(PARTICIPANT_BRIEF_TEMPLATE).format(
         brief_id=brief_path.stem,
         status=args.status,
         role=role,
@@ -138,8 +139,8 @@ def command_role_brief(args: argparse.Namespace) -> None:
     )
     write(brief_path, content, args.dry_run)
     text = replace_line(discussion.read_text(encoding="utf-8"), "Updated At: ", created_at)
-    text = append_bullet(text, "Role Briefs", f"{brief_path.stem}: {role} ({args.status})")
-    text = append_event_text(text, f"role brief recorded: {brief_path.stem}")
+    text = append_bullet(text, "Participant Briefs", f"{brief_path.stem}: {role} ({args.status})")
+    text = append_event_text(text, f"participant brief recorded: {brief_path.stem}")
     save(discussion, text, args.dry_run)
 
 
@@ -150,7 +151,7 @@ def command_discussion_synthesize(args: argparse.Namespace) -> None:
     require_challenge_fields(args)
     missing = missing_independent_role_briefs(root, discussion)
     if missing:
-        raise SystemExit("independent discussion synthesis requires role briefs for: " + ", ".join(missing))
+        raise SystemExit("independent interaction synthesis requires participant briefs for: " + ", ".join(missing))
     core_judgment = (getattr(args, "core_judgment", None) or args.agreements).strip()
     key_arguments = (getattr(args, "key_arguments", None) or args.agreements).strip()
     document_use_notes = (
@@ -246,7 +247,7 @@ def command_discussion_synthesize(args: argparse.Namespace) -> None:
     text = replace_section(text, "Current Summary", args.recommended_direction)
     text = replace_line(text, "Status: ", "synthesized")
     text = replace_line(text, "Updated At: ", timestamp)
-    text = append_event_text(text, "discussion synthesis recorded")
+    text = append_event_text(text, "interaction synthesis recorded")
     save(discussion, text, args.dry_run)
 
 
@@ -332,9 +333,9 @@ def board_content(root: Path) -> str:
 def discussion_board_lines(root: Path) -> str:
     discussions = [
         path
-        for path in sorted(state_dirs(root)["discussions"].glob("*.md"), key=state_file_sort_key)
+        for path in sorted(state_dirs(root)["interactions"].glob("*.md"), key=state_file_sort_key)
         if header_value(path.read_text(encoding="utf-8"), "Status") not in {"closed", "superseded"}
-    ] if state_dirs(root)["discussions"].exists() else []
+    ] if state_dirs(root)["interactions"].exists() else []
     if not discussions:
         return "- none"
     return "\n".join(f"- {discussion_summary(path)}" for path in discussions)
@@ -374,7 +375,7 @@ def risk_board_lines(root: Path) -> str:
 
 
 def resolve_discussion(root: Path, discussion_id: str) -> Path:
-    return resolve_state_file(root, "discussions", discussion_id)
+    return resolve_state_file(root, "interactions", discussion_id)
 
 
 def resolve_architect_intake(root: Path, intake_id: str) -> Path:
@@ -383,10 +384,10 @@ def resolve_architect_intake(root: Path, intake_id: str) -> Path:
 
 def command_role_list(args: argparse.Namespace) -> None:
     root = repo_root(Path.cwd())
-    print("# x Roles")
-    print(f"Runtime Roles: {state_dirs(root)['roles']}")
+    print("# x Participants")
+    print(f"Runtime Participants: {state_dirs(root)['participants']}")
     print()
-    print("## Active Role Cards")
+    print("## Active Participant Cards")
     names = all_role_names(root)
     if not names:
         print("- none")
@@ -412,13 +413,13 @@ def command_role_set(args: argparse.Namespace) -> None:
     if has_content(body):
         content = body.strip() + "\n"
     else:
-        content = read_template(ROLE_CARD_TEMPLATE).format(
+        content = read_template(PARTICIPANT_CARD_TEMPLATE).format(
             role=role,
             updated_at=now(),
             responsibilities=(args.responsibilities or "Not specified.").strip(),
-            use_when=(args.use_when or "Use when this role's perspective can materially improve root direction before architect intake.").strip(),
+            use_when=(args.use_when or "Use when this participant view can materially improve root direction before architect intake.").strip(),
             avoid_when=(args.avoid_when or "Avoid when the question belongs to accepted execution, lane management, reviewer assignment, or final merge authority.").strip(),
-            inputs_to_inspect=(args.inputs_to_inspect or "Root thesis, interaction transcript, relevant role turns, repo constraints, and prior root decisions when available.").strip(),
+            inputs_to_inspect=(args.inputs_to_inspect or "Root thesis, interaction transcript, relevant participant turns, repo constraints, and prior root decisions when available.").strip(),
             focus=(args.focus or "Not specified.").strip(),
             must_challenge=(args.must_challenge or "Not specified.").strip(),
             operating_posture=(args.operating_posture or "Be advisory, concrete, and decision-oriented. Keep root and architect handoff needs visible.").strip(),
@@ -428,7 +429,7 @@ def command_role_set(args: argparse.Namespace) -> None:
             out_of_bounds=(args.out_of_bounds or "Do not create execution tasks, manage lanes, assign reviewers, or issue architect directives.").strip(),
             output_format=(args.output_format or "Return stance, reasons, objections, rejected options, weakest assumption, evidence that would change the stance, document-use notes, and questions needing root decision.").strip(),
         )
-    path = state_dirs(root)["roles"] / f"{role}.md"
+    path = state_dirs(root)["participants"] / f"{role}.md"
     write(path, content, args.dry_run)
 
 
@@ -450,16 +451,16 @@ def intake_summary(path: Path) -> str:
 
 
 def role_briefs_for_discussion(root: Path, discussion_id: str, role: str | None = None) -> list[Path]:
-    briefs = files_for_header(root, "role-briefs", "Linked Discussion", discussion_id)
+    briefs = files_for_header(root, "participant-briefs", "Linked Interaction", discussion_id)
     if role is None:
         return briefs
-    return [brief for brief in briefs if header_value(brief.read_text(encoding="utf-8"), "Role") == role]
+    return [brief for brief in briefs if header_value(brief.read_text(encoding="utf-8"), "Participant") == role]
 
 
 def latest_accepted_intake_for_discussion(root: Path, discussion_id: str) -> Path | None:
     candidates = [
         path
-        for path in files_for_header(root, "architect-intakes", "Linked Discussion", discussion_id)
+        for path in files_for_header(root, "architect-intakes", "Linked Interaction", discussion_id)
         if header_value(path.read_text(encoding="utf-8"), "Status") == "accepted"
     ]
     return candidates[-1] if candidates else None
@@ -483,10 +484,10 @@ def normalized_participants(root: Path, values: list[str]) -> list[str]:
 
 
 def validate_mode_participants(mode: str, participants: list[str]) -> None:
-    if mode == "with" and len(participants) != 1:
-        raise SystemExit("with discussion requires exactly one participant")
-    if mode in {"joint", "independent"} and len(participants) < 2:
-        raise SystemExit(f"{mode} discussion requires at least two participants")
+    if mode == "joint" and len(participants) < 1:
+        raise SystemExit("joint interaction requires at least one participant")
+    if mode == "independent" and len(participants) < 2:
+        raise SystemExit("independent interaction requires at least two participants")
 
 
 def normalized_interaction_actor(actor: str) -> str:
@@ -507,8 +508,6 @@ def normalized_turn_target(discussion: Path, raw_target: str | None, actor: str)
     text = discussion.read_text(encoding="utf-8")
     participants = [item.strip() for item in header_value(text, "Participants").split(",") if item.strip()]
     if raw_target is None:
-        if header_value(text, "Mode") == "with":
-            return participants[0] if actor in {"root", "main"} and participants else "root"
         return "all"
     targets: list[str] = []
     for item in raw_target.split(","):
@@ -554,9 +553,9 @@ def require_interaction_writable(discussion: Path, operation: str) -> None:
 
 
 def require_discussion_arg(args: argparse.Namespace) -> str:
-    discussion_id = getattr(args, "discussion_id", None)
+    discussion_id = getattr(args, "interaction_id", None) or getattr(args, "discussion_id", None)
     if not discussion_id:
-        raise SystemExit("--discussion-id or --interaction-id is required")
+        raise SystemExit("--interaction-id is required")
     return discussion_id
 
 
@@ -567,17 +566,17 @@ def require_accepted_decision(root: Path, decision_id: str, discussion_id: str) 
     decision_text = decision.read_text(encoding="utf-8")
     if header_value(decision_text, "Status") != "accepted":
         raise SystemExit(f"decision {decision_id} is not accepted")
-    linked_discussion = header_value(decision_text, "Linked Discussion")
+    linked_discussion = header_value(decision_text, "Linked Interaction")
     if linked_discussion not in {"", "none", discussion_id}:
-        raise SystemExit(f"decision {decision_id} is linked to discussion {linked_discussion}, not {discussion_id}")
+        raise SystemExit(f"decision {decision_id} is linked to interaction {linked_discussion}, not {discussion_id}")
     return decision
 
 
 def require_decision_can_link_intake(decision: Path, discussion_id: str, intake_id: str) -> None:
     text = decision.read_text(encoding="utf-8")
-    linked_discussion = header_value(text, "Linked Discussion")
+    linked_discussion = header_value(text, "Linked Interaction")
     if linked_discussion not in {"", "none", discussion_id}:
-        raise SystemExit(f"decision {decision.stem} is linked to discussion {linked_discussion}, not {discussion_id}")
+        raise SystemExit(f"decision {decision.stem} is linked to interaction {linked_discussion}, not {discussion_id}")
     linked_intake = header_value(text, "Linked Architect Intake")
     if linked_intake not in {"", "none", intake_id}:
         raise SystemExit(f"decision {decision.stem} is already linked to architect intake {linked_intake}")
@@ -585,24 +584,24 @@ def require_decision_can_link_intake(decision: Path, discussion_id: str, intake_
 
 def link_decision_to_intake(decision: Path, discussion_id: str, intake_id: str, dry_run: bool) -> None:
     text = decision.read_text(encoding="utf-8")
-    text = upsert_line_after(text, "Linked Discussion: ", discussion_id, "Linked Run: ")
-    text = upsert_line_after(text, "Linked Architect Intake: ", intake_id, "Linked Discussion: ")
+    text = upsert_line_after(text, "Linked Interaction: ", discussion_id, "Linked Run: ")
+    text = upsert_line_after(text, "Linked Architect Intake: ", intake_id, "Linked Interaction: ")
     save(decision, text, dry_run)
 
 
 def normalize_role_name(role: str) -> str:
     normalized = role.strip().lower()
-    if normalized in RESERVED_ROLE_NAMES:
-        raise SystemExit(f"reserved role name: {role}")
-    if not ROLE_NAME_PATTERN.match(normalized):
-        raise SystemExit(f"invalid role name: {role}")
+    if normalized in RESERVED_PARTICIPANT_NAMES:
+        raise SystemExit(f"reserved participant name: {role}")
+    if not PARTICIPANT_NAME_PATTERN.match(normalized):
+        raise SystemExit(f"invalid participant name: {role}")
     return normalized
 
 
 def normalize_role_reference(root: Path, role: str) -> str:
     normalized = normalize_role_name(role)
     if not role_exists(root, normalized):
-        raise SystemExit(f"unknown role: {role}")
+        raise SystemExit(f"unknown participant: {role}")
     return normalized
 
 
@@ -611,17 +610,17 @@ def role_exists(root: Path, role: str) -> bool:
 
 
 def all_role_names(root: Path) -> list[str]:
-    names = {path.stem for path in DEFAULT_ROLE_CARDS_DIR.glob("*.md")} if DEFAULT_ROLE_CARDS_DIR.exists() else set()
-    runtime_dir = state_dirs(root)["roles"]
+    names = {path.stem for path in DEFAULT_PARTICIPANT_CARDS_DIR.glob("*.md")} if DEFAULT_PARTICIPANT_CARDS_DIR.exists() else set()
+    runtime_dir = state_dirs(root)["participants"]
     if runtime_dir.exists():
         names.update(path.stem for path in runtime_dir.glob("*.md"))
-    names.difference_update(RESERVED_ROLE_NAMES)
+    names.difference_update(RESERVED_PARTICIPANT_NAMES)
     return sorted(names)
 
 
 def role_source(root: Path, role: str) -> str:
-    runtime = state_dirs(root)["roles"] / f"{role}.md"
-    default = DEFAULT_ROLE_CARDS_DIR / f"{role}.md"
+    runtime = state_dirs(root)["participants"] / f"{role}.md"
+    default = DEFAULT_PARTICIPANT_CARDS_DIR / f"{role}.md"
     if runtime.exists() and default.exists():
         return "runtime override"
     if runtime.exists():
@@ -631,13 +630,13 @@ def role_source(root: Path, role: str) -> str:
 
 def role_card_content(root: Path, role: str) -> str:
     role = normalize_role_name(role)
-    runtime = state_dirs(root)["roles"] / f"{role}.md"
+    runtime = state_dirs(root)["participants"] / f"{role}.md"
     if runtime.exists():
         return runtime.read_text(encoding="utf-8")
-    default = DEFAULT_ROLE_CARDS_DIR / f"{role}.md"
+    default = DEFAULT_PARTICIPANT_CARDS_DIR / f"{role}.md"
     if default.exists():
         return default.read_text(encoding="utf-8")
-    raise SystemExit(f"unknown role: {role}")
+    raise SystemExit(f"unknown participant: {role}")
 
 
 def compact(value: str, *, limit: int = 160) -> str:

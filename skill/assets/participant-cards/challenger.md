@@ -1,6 +1,6 @@
-# x Role Card: challenger
+# x Participant Card: challenger
 
-Role: challenger
+Participant: challenger
 Updated At: default
 
 ## Responsibilities
@@ -12,7 +12,7 @@ Updated At: default
 ## Use When
 
 - The decision is high-risk, irreversible, politically attractive, or weakly evidenced.
-- Other roles are converging too quickly.
+- Other participants are converging too quickly.
 - Root explicitly wants critique, pre-mortem, or disconfirming evidence.
 
 ## Avoid When
@@ -23,7 +23,7 @@ Updated At: default
 
 ## Inputs To Inspect
 
-- Root thesis, claimed benefits, role turns, synthesis drafts, explicit assumptions, omitted alternatives, and accepted constraints.
+- Root thesis, claimed benefits, participant turns, synthesis drafts, explicit assumptions, omitted alternatives, and accepted constraints.
 - Evidence gaps, weak wording, unclear owners, missing stop conditions, and root decisions being avoided.
 
 ## Focus

@@ -14,11 +14,8 @@ $x resume                  resume the current run
 $x checkpoint              write a progress checkpoint
 $x close                   close with gates and recommendation
 
-$x discussion: <topic>     discuss direction before architecture
 $x council: <topic>        founder/cto/product-lead/market-intelligence/gtm/challenger room
-$x council with <roles>: <topic> discuss with selected roles
-$x with <role>: <question> ask one configured role
-$x challenger: <question>  challenge assumptions
+$x council with <participants>: <topic> discuss with selected participants
 ```
 
 Users talk to `$x`. The bundled `x_state.py` script is internal plumbing for recording markdown state, creating packages, and running gates; users should not need to memorize its command list.
@@ -27,8 +24,8 @@ Users talk to `$x`. The bundled `x_state.py` script is internal plumbing for rec
 
 `x` keeps architecture, execution, review, and close decisions explicit:
 
-- Turns founder, CTO, product-lead, market-intelligence, GTM, challenger, council, or custom-role discussion into durable direction.
-- Records root decisions before treating discussion output as accepted work.
+- Turns default council or selected-participant rooms into durable direction.
+- Records root decisions before treating room output as accepted work.
 - Converts accepted direction into an Architecture Brief, Technical Contract, and Architect Execution Plan.
 - Splits implementation into lane worktrees with scoped ownership and verification expectations.
 - Requires reviewer evidence and architect `merge-ok` before integration.
@@ -36,11 +33,11 @@ Users talk to `$x`. The bundled `x_state.py` script is internal plumbing for rec
 
 ## How The Loop Works
 
-![x rooms and lanes diagram showing role rooms, architect brief and plan, lane implementation review fix loops, architect directive loop, architect review, merge-ok, and the merge-ready gate](docs/images/x-rooms-and-lanes.png)
+![x rooms and lanes diagram showing participant rooms, architect brief and plan, lane implementation review fix loops, architect directive loop, architect review, merge-ok, and the merge-ready gate](docs/images/x-rooms-and-lanes.png)
 
 _Rooms shape direction; lanes run implementation, code review, and fix-pass loops; architect directives and `merge-ok` control the path to the merge-ready gate._
 
-Direction work happens before architecture when root wants to shape or challenge a direction. The visible room keeps role identity clear, for example founder, CTO, product-lead, market-intelligence, GTM, challenger, custom roles, and main. Room output is summarized as `Room Essence` so main can later draft a BRD, PRD, strategy document, sales strategy, or architect intake from the same advisory source.
+Direction work happens before architecture when root wants to shape or challenge a direction. The visible room keeps participant identity clear, for example founder, CTO, product-lead, market-intelligence, GTM, challenger, custom participants, and main. Room output is summarized as `Room Essence` so main can later draft a BRD, PRD, strategy document, sales strategy, or architect intake from the same advisory source.
 
 The architect room turns accepted direction into execution boundaries. After root accepts the Architecture Brief, `x` materializes an integration worktree and requires a gated Architect Execution Plan before any lane work starts.
 
@@ -50,7 +47,7 @@ Close is a gate, not a feeling. `x` checks planned lanes, reviews, architect app
 
 ## Core Concepts
 
-- **Rooms:** Visible root-facing conversations with named participants. Discussion output is advisory until root records a decision, and final synthesis is captured as `Room Essence`.
+- **Rooms:** Visible root-facing conversations with named participants. Room output is advisory until root records a decision, and final synthesis is captured as `Room Essence`.
 - **Architect:** Owns execution shape, technical boundaries, directives, and merge review.
 - **Lanes:** Isolated implementation scopes that can run in parallel when the plan and dependencies allow it.
 - **Gates:** Simple checkable transitions that prevent premature lane work, integration, and close.
@@ -120,7 +117,7 @@ python ~/.codex/skills/x/scripts/x_state.py cleanup-worktrees --run-id <run-id> 
 - `status` reports the current project and run state.
 - `audit` produces a read-only run report unless `--write` is passed.
 - `cleanup-worktrees` removes only clean, integrated, registered lane worktrees when `--apply` is passed.
-- Recommended reviewer handoff: `package --role reviewer --reviewer-backend codex-native` runs native `codex review` from the lane worktree and records the resulting review without embedding the full raw diff in a package. The CLI default remains `package` for compatibility.
+- Recommended reviewer handoff: `package --role reviewer --reviewer-backend codex-native` runs native `codex review` from the lane worktree and records the resulting review without embedding the full raw diff in a package. The CLI default remains `package`.
 
 Most other `x_state.py` commands are workflow internals used by the `$x` skill to record interactions, briefs, plans, packages, reviews, directives, decisions, risks, gates, and close records.
 

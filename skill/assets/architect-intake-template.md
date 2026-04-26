@@ -2,7 +2,7 @@
 
 Status: {status}
 Date: {date}
-Linked Discussion: {discussion_id}
+Linked Interaction: {discussion_id}
 Linked Decision: {decision_id}
 
 ## Accepted Direction

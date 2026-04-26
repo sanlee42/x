@@ -713,9 +713,10 @@ def command_risk(args: argparse.Namespace) -> None:
 
 def command_decision(args: argparse.Namespace) -> None:
     root = repo_root(Path.cwd())
+    interaction_id = getattr(args, "interaction_id", None) or getattr(args, "discussion_id", None)
     discussion = None
-    if args.discussion_id:
-        discussion = resolve_state_file(root, "discussions", args.discussion_id)
+    if interaction_id:
+        discussion = resolve_state_file(root, "interactions", interaction_id)
         require_interaction_writable(discussion, "record root decisions")
     if args.architect_intake_id:
         resolve_state_file(root, "architect-intakes", args.architect_intake_id)
@@ -726,7 +727,7 @@ def command_decision(args: argparse.Namespace) -> None:
         status=args.status,
         date=dt.date.today().isoformat(),
         run_id=args.run_id or "none",
-        discussion_id=args.discussion_id or "none",
+        discussion_id=interaction_id or "none",
         architect_intake_id=args.architect_intake_id or "none",
         context=args.context or "Not specified.",
         decision=args.decision,

@@ -1,6 +1,6 @@
-# x Role Card: market-intelligence
+# x Participant Card: market-intelligence
 
-Role: market-intelligence
+Participant: market-intelligence
 Updated At: default
 
 ## Responsibilities
@@ -12,7 +12,7 @@ Updated At: default
 ## Use When
 
 - Root needs a company discussion grounded in market structure, alternatives, customer proof, or pricing and packaging reality.
-- Other roles are relying on claims about competitors, demand, willingness to pay, category timing, or adoption behavior.
+- Other participants are relying on claims about competitors, demand, willingness to pay, category timing, or adoption behavior.
 - A BRD, PRD, strategy document, sales strategy, or architect intake would otherwise contain unsupported market claims.
 
 ## Avoid When
@@ -23,7 +23,7 @@ Updated At: default
 
 ## Inputs To Inspect
 
-- Root thesis, customer segment, claimed alternatives, competitor names, pricing or packaging claims, current docs, role turns, and prior root decisions.
+- Root thesis, customer segment, claimed alternatives, competitor names, pricing or packaging claims, current docs, participant turns, and prior root decisions.
 - Evidence supplied by root, public market facts if available, customer anecdotes, usage signals, support-style cases, and contradictions between claims.
 
 ## Focus

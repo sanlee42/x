@@ -47,8 +47,8 @@ def project_context(root: Path) -> str:
 def recent_state_summary(root: Path, run_id: str) -> str:
     lines: list[str] = []
     for kind in (
-        "discussions",
-        "role-briefs",
+        "interactions",
+        "participant-briefs",
         "architect-intakes",
         "briefs",
         "contracts",
@@ -690,17 +690,18 @@ def command_package(args: argparse.Namespace) -> None:
 
 
 def command_councilor_package(root: Path, args: argparse.Namespace) -> None:
-    if not args.discussion_id:
-        raise SystemExit("councilor package requires --discussion-id or --interaction-id")
+    interaction_id = getattr(args, "interaction_id", None) or getattr(args, "discussion_id", None)
+    if not interaction_id:
+        raise SystemExit("councilor package requires --interaction-id")
     if not args.council_role:
-        raise SystemExit("councilor package requires --council-role")
-    discussion = resolve_discussion(root, args.discussion_id)
-    require_interaction_writable(discussion, "create role package")
+        raise SystemExit("councilor package requires --participant")
+    discussion = resolve_discussion(root, interaction_id)
+    require_interaction_writable(discussion, "create participant package")
     text = discussion.read_text(encoding="utf-8")
     participants = {item.strip() for item in header_value(text, "Participants").split(",")}
     council_role = normalize_role_reference(root, args.council_role)
     if council_role not in participants:
-        raise SystemExit(f"council role {council_role} is not a participant in interaction {discussion.stem}")
+        raise SystemExit(f"participant {council_role} is not in interaction {discussion.stem}")
     notes = optional_text_arg(args, "notes", "None.")
     existing_briefs = role_briefs_for_discussion(root, discussion.stem)
     intake = latest_accepted_intake_for_discussion(root, discussion.stem)
@@ -711,23 +712,23 @@ def command_councilor_package(root: Path, args: argparse.Namespace) -> None:
                 [
                     f"- You are `{council_role}` in a `{header_value(text, 'Mode')}` root interaction.",
                     f"- Participants: {header_value(text, 'Participants')}.",
-                    "- Reply as this role in the ongoing conversation; do not collapse the exchange into a neutral summary.",
+                    "- Reply as this participant view in the ongoing conversation; do not collapse the exchange into a neutral summary.",
                     "- Name who you are answering and keep other participants visible when their views matter.",
-                    "- Provide a visible conversational turn first; formal role-brief fields may follow.",
+                    "- Provide a visible conversational turn first; formal participant-brief fields may follow.",
                     "- Do not close, synthesize, or exit the interaction unless root/main explicitly asks for that step.",
                 ]
             ),
             "",
-            "Discussion:",
+            "Interaction:",
             text,
             "",
-            "Discussion Summary:",
+            "Interaction Summary:",
             discussion_summary(discussion),
             "",
-            "Role Card:",
+            "Participant Card:",
             role_card_content(root, council_role),
             "",
-            "Existing Role Briefs:",
+            "Existing Participant Briefs:",
             role_brief_summary(existing_briefs),
             "",
             "Accepted Architect Intake:",
@@ -737,10 +738,10 @@ def command_councilor_package(root: Path, args: argparse.Namespace) -> None:
             notes,
         ]
     )
-    purpose = f"Produce a {council_role} role brief for the linked root interaction."
+    purpose = f"Produce a {council_role} participant brief for the linked root interaction."
     expected_return = (
-        "Return `Visible Turn` first: a conversational reply from this role addressed to root and/or named participants. "
-        "Then follow the role card's `Output Format`, while still including role-brief fields: stance/recommendation, rationale, "
+        "Return `Visible Turn` first: a conversational reply from this participant addressed to root and/or named participants. "
+        "Then follow the participant card's `Output Format`, while still including participant-brief fields: stance/recommendation, rationale, "
         "objections or rejected options, risks, decisions needed, implications for architect, strongest objection, weakest assumption, "
         "evidence that would change the recommendation, and document-use notes for the later Room Essence. "
         "Do not create execution tasks, manage lanes, or bypass architect."
@@ -784,7 +785,7 @@ def role_brief_summary(briefs: list[Path]) -> str:
     for brief in briefs[-10:]:
         text = brief.read_text(encoding="utf-8")
         lines.append(
-            f"- {brief.stem}: role={header_value(text, 'Role')}; "
+            f"- {brief.stem}: participant={header_value(text, 'Participant')}; "
             f"status={header_value(text, 'Status')}; recommendation={compact(section_content(text, 'Recommendation'))}"
         )
     return "\n".join(lines)

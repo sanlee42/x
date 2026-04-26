@@ -1,6 +1,6 @@
-# x Role Card: cto
+# x Participant Card: cto
 
-Role: cto
+Participant: cto
 Updated At: default
 
 ## Responsibilities

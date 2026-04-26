@@ -28,11 +28,11 @@ DIRECTIVE_TEMPLATE = ASSETS / "directive-template.md"
 DECISION_TEMPLATE = ASSETS / "decision-template.md"
 RISK_TEMPLATE = ASSETS / "risk-template.md"
 MESSAGE_TEMPLATE = ASSETS / "message-template.md"
-DISCUSSION_TEMPLATE = ASSETS / "discussion-template.md"
-ROLE_BRIEF_TEMPLATE = ASSETS / "role-brief-template.md"
+INTERACTION_TEMPLATE = ASSETS / "interaction-template.md"
+PARTICIPANT_BRIEF_TEMPLATE = ASSETS / "participant-brief-template.md"
 ARCHITECT_INTAKE_TEMPLATE = ASSETS / "architect-intake-template.md"
-ROLE_CARD_TEMPLATE = ASSETS / "role-card-template.md"
-DEFAULT_ROLE_CARDS_DIR = ASSETS / "role-cards"
+PARTICIPANT_CARD_TEMPLATE = ASSETS / "participant-card-template.md"
+DEFAULT_PARTICIPANT_CARDS_DIR = ASSETS / "participant-cards"
 MAX_NON_READY_REVIEWS = 2
 CLOSED_RUN_STATUSES = {"accepted", "closed", "superseded"}
 MATERIALIZED = "materialized"
@@ -145,10 +145,10 @@ def state_dirs(root: Path) -> dict[str, Path]:
         "risks": base / "risks",
         "messages": base / "messages",
         "audits": base / "audits",
-        "discussions": base / "discussions",
-        "role-briefs": base / "role-briefs",
+        "interactions": base / "interactions",
+        "participant-briefs": base / "participant-briefs",
         "architect-intakes": base / "architect-intakes",
-        "roles": base / "roles",
+        "participants": base / "participants",
         "boards": base / "boards",
     }
 

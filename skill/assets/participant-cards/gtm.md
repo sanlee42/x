@@ -1,6 +1,6 @@
-# x Role Card: gtm
+# x Participant Card: gtm
 
-Role: gtm
+Participant: gtm
 Updated At: default
 
 ## Responsibilities

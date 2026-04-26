@@ -4,11 +4,11 @@ from tests.x_state_test_base import XStateTestCase
 
 
 class XStateDiscussionTests(XStateTestCase):
-    def discussion_file(self, discussion_id: str):
-        return self.x_home / "projects/repo/discussions" / f"{discussion_id}.md"
+    def interaction_file(self, interaction_id: str):
+        return self.x_home / "projects/repo/interactions" / f"{interaction_id}.md"
 
-    def role_brief_file(self, brief_id: str):
-        return self.x_home / "projects/repo/role-briefs" / f"{brief_id}.md"
+    def participant_brief_file(self, brief_id: str):
+        return self.x_home / "projects/repo/participant-briefs" / f"{brief_id}.md"
 
     def architect_intake_file(self, intake_id: str):
         return self.x_home / "projects/repo/architect-intakes" / f"{intake_id}.md"
@@ -16,41 +16,41 @@ class XStateDiscussionTests(XStateTestCase):
     def decision_file(self, decision_id: str):
         return self.x_home / "projects/repo/decisions" / f"{decision_id}.md"
 
-    def test_role_registry_lists_defaults_and_allows_runtime_roles(self) -> None:
-        roles = self.x("role-list").stdout
-        self.assertIn("founder (default)", roles)
-        self.assertIn("cto (default)", roles)
-        self.assertIn("product-lead (default)", roles)
-        self.assertIn("market-intelligence (default)", roles)
-        self.assertIn("gtm (default)", roles)
-        self.assertIn("challenger (default)", roles)
-        self.assertIn("council: founder, cto, product-lead, market-intelligence, gtm, challenger", roles)
+    def test_participant_registry_lists_defaults_and_allows_runtime_participants(self) -> None:
+        participants = self.x("participant-list").stdout
+        self.assertIn("founder (default)", participants)
+        self.assertIn("cto (default)", participants)
+        self.assertIn("product-lead (default)", participants)
+        self.assertIn("market-intelligence (default)", participants)
+        self.assertIn("gtm (default)", participants)
+        self.assertIn("challenger (default)", participants)
+        self.assertIn("council: founder, cto, product-lead, market-intelligence, gtm, challenger", participants)
         for removed_role in ("strategy", "technical", "product", "architect", "growth"):
-            self.assertNotIn(f"- {removed_role} (default)", roles)
-        self.assertNotIn("company-council", roles)
-        self.assertNotIn("product-acceptance", roles)
+            self.assertNotIn(f"- {removed_role} (default)", participants)
+        self.assertNotIn("company-council", participants)
+        self.assertNotIn("product-acceptance", participants)
 
-        product_lead = self.x("role-show", "product-lead").stdout
+        product_lead = self.x("participant-show", "product-lead").stdout
         self.assertIn("## Use When", product_lead)
         self.assertIn("user path", product_lead)
         self.assertIn("unacceptable experience", product_lead)
         self.assertIn("Acceptance/QA", product_lead)
-        founder = self.x("role-show", "founder").stdout
+        founder = self.x("participant-show", "founder").stdout
         self.assertIn("company-level judgment", founder)
-        market = self.x("role-show", "market-intelligence").stdout
+        market = self.x("participant-show", "market-intelligence").stdout
         self.assertIn("customer evidence", market)
         self.assertIn("competitors", market)
-        gtm = self.x("role-show", "gtm").stdout
+        gtm = self.x("participant-show", "gtm").stdout
         self.assertIn("sales motion", gtm)
         self.assertIn("pricing", gtm)
 
         for removed_role in ("strategy", "technical", "product", "architect", "growth"):
-            failed = self.x("role-show", removed_role, check=False)
+            failed = self.x("participant-show", removed_role, check=False)
             self.assertNotEqual(failed.returncode, 0)
-            self.assertIn(f"unknown role: {removed_role}", failed.stderr + failed.stdout)
+            self.assertIn(f"unknown participant: {removed_role}", failed.stderr + failed.stdout)
 
         self.x(
-            "role-set",
+            "participant-set",
             "ops",
             "--responsibilities",
             "Keep launch operations bounded.",
@@ -59,23 +59,23 @@ class XStateDiscussionTests(XStateTestCase):
             "--handoff-value",
             "Surface runbook risks before architect intake.",
         )
-        self.assertIn("ops (runtime)", self.x("role-list").stdout)
-        ops = self.x("role-show", "ops").stdout
+        self.assertIn("ops (runtime)", self.x("participant-list").stdout)
+        ops = self.x("participant-show", "ops").stdout
         self.assertIn("launch operations", ops)
         self.assertIn("## Evidence Standard", ops)
         self.assertIn("Launch readiness is unclear.", ops)
         self.assertIn("Surface runbook risks before architect intake.", ops)
 
-        self.x("role-set", "cto", "--body", "# x Role Card: cto\n\nRole: cto\n\nModified CTO card.\n")
-        self.assertIn("cto (runtime override)", self.x("role-list").stdout)
-        self.assertIn("Modified CTO card", self.x("role-show", "cto").stdout)
+        self.x("participant-set", "cto", "--body", "# x Participant Card: cto\n\nParticipant: cto\n\nModified CTO card.\n")
+        self.assertIn("cto (runtime override)", self.x("participant-list").stdout)
+        self.assertIn("Modified CTO card", self.x("participant-show", "cto").stdout)
 
         failed = self.x(
             "interaction-start",
             "--mode",
-            "with",
+            "joint",
             "--title",
-            "Unknown role",
+            "Unknown participant",
             "--agenda",
             "Should fail.",
             "--participants",
@@ -83,19 +83,19 @@ class XStateDiscussionTests(XStateTestCase):
             check=False,
         )
         self.assertNotEqual(failed.returncode, 0)
-        self.assertIn("unknown role: unknown", failed.stderr + failed.stdout)
+        self.assertIn("unknown participant: unknown", failed.stderr + failed.stdout)
 
-        failed = self.x("role-set", "engineer", "--body", "# x Role Card: engineer\n", check=False)
+        failed = self.x("participant-set", "engineer", "--body", "# x Participant Card: engineer\n", check=False)
         self.assertNotEqual(failed.returncode, 0)
-        self.assertIn("reserved role name: engineer", failed.stderr + failed.stdout)
+        self.assertIn("reserved participant name: engineer", failed.stderr + failed.stdout)
 
-        failed = self.x("role-set", "council", "--body", "# x Role Card: council\n", check=False)
+        failed = self.x("participant-set", "council", "--body", "# x Participant Card: council\n", check=False)
         self.assertNotEqual(failed.returncode, 0)
-        self.assertIn("reserved role name: council", failed.stderr + failed.stdout)
+        self.assertIn("reserved participant name: council", failed.stderr + failed.stdout)
 
-        self.assertNotIn("- engineer ", self.x("role-list").stdout)
+        self.assertNotIn("- engineer ", self.x("participant-list").stdout)
 
-    def test_council_preset_expands_and_packages_default_roles(self) -> None:
+    def test_council_preset_expands_and_packages_default_participants(self) -> None:
         self.x(
             "interaction-start",
             "--mode",
@@ -109,7 +109,7 @@ class XStateDiscussionTests(XStateTestCase):
             "--interaction-id",
             "inter-company",
         )
-        interaction = self.discussion_file("inter-company").read_text(encoding="utf-8")
+        interaction = self.interaction_file("inter-company").read_text(encoding="utf-8")
         self.assertIn("Participants: founder, cto, product-lead, market-intelligence, gtm, challenger", interaction)
 
         self.x(
@@ -118,17 +118,17 @@ class XStateDiscussionTests(XStateTestCase):
             "councilor",
             "--interaction-id",
             "inter-company",
-            "--council-role",
+            "--participant",
             "market-intelligence",
             "--package-id",
             "pkg-market",
         )
         package = self.package_file("pkg-market").read_text(encoding="utf-8")
         self.assertIn("Role: councilor", package)
-        self.assertIn("# x Role Card: market-intelligence", package)
+        self.assertIn("# x Participant Card: market-intelligence", package)
         self.assertIn("Competitors, substitutes, market structure, customer evidence", package)
         self.assertIn("document-use notes", package)
-        self.assertIn("pkg-market: councilor/market-intelligence", self.discussion_file("inter-company").read_text(encoding="utf-8"))
+        self.assertIn("pkg-market: councilor/market-intelligence", self.interaction_file("inter-company").read_text(encoding="utf-8"))
 
         self.x(
             "interaction-start",
@@ -145,7 +145,7 @@ class XStateDiscussionTests(XStateTestCase):
             "--interaction-id",
             "inter-selected",
         )
-        selected = self.discussion_file("inter-selected").read_text(encoding="utf-8")
+        selected = self.interaction_file("inter-selected").read_text(encoding="utf-8")
         self.assertIn("Participants: founder, gtm, challenger", selected)
 
         failed = self.x(
@@ -161,19 +161,19 @@ class XStateDiscussionTests(XStateTestCase):
             check=False,
         )
         self.assertNotEqual(failed.returncode, 0)
-        self.assertIn("unknown role: company-council", failed.stderr + failed.stdout)
+        self.assertIn("unknown participant: company-council", failed.stderr + failed.stdout)
 
-    def test_interaction_alias_supports_single_custom_role_loop(self) -> None:
+    def test_single_custom_participant_loop(self) -> None:
         self.x(
-            "role-set",
+            "participant-set",
             "ops",
             "--body",
-            "# x Role Card: ops\n\nRole: ops\n\n## Responsibilities\n\nChallenge operational readiness.\n",
+            "# x Participant Card: ops\n\nParticipant: ops\n\n## Responsibilities\n\nChallenge operational readiness.\n",
         )
         self.x(
             "interaction-start",
             "--mode",
-            "with",
+            "joint",
             "--title",
             "Ops readiness",
             "--agenda",
@@ -234,7 +234,7 @@ class XStateDiscussionTests(XStateTestCase):
             "--document-use-notes",
             "BRD and sales strategy may claim manual launch, but must not imply repeatable automation.",
         )
-        interaction = self.discussion_file("inter-ops").read_text(encoding="utf-8")
+        interaction = self.interaction_file("inter-ops").read_text(encoding="utf-8")
         self.assertIn("Status: synthesized", interaction)
         self.assertIn("ops / response", interaction)
         self.assertIn("### Room Essence", interaction)
@@ -252,7 +252,7 @@ class XStateDiscussionTests(XStateTestCase):
             "--title",
             "Visible joint direction",
             "--agenda",
-            "Keep role conversation visible.",
+            "Keep participant conversation visible.",
             "--participants",
             "product-lead",
             "cto",
@@ -276,7 +276,7 @@ class XStateDiscussionTests(XStateTestCase):
         self.assertIn("## Room Roster", first.stdout)
         self.assertIn("- root: direction owner", first.stdout)
         self.assertIn("- main: facilitator and recorder", first.stdout)
-        self.assertIn("- product-lead: active role view", first.stdout)
+        self.assertIn("- product-lead: active participant view", first.stdout)
         self.assertIn("To: product-lead", first.stdout)
         self.assertIn("What user path should this protect?", first.stdout)
 
@@ -298,42 +298,42 @@ class XStateDiscussionTests(XStateTestCase):
         self.assertIn("To: product-lead", second.stdout)
         self.assertIn("To: all", second.stdout)
         self.assertIn("The flow must keep the buyer's next action obvious.", second.stdout)
-        self.assertIn("Status: active", self.discussion_file("inter-visible").read_text(encoding="utf-8"))
+        self.assertIn("Status: active", self.interaction_file("inter-visible").read_text(encoding="utf-8"))
 
         shown = self.x("interaction-show", "--interaction-id", "inter-visible")
         self.assertIn("## Turns", shown.stdout)
         self.assertIn("To: all", shown.stdout)
 
-    def test_interaction_id_aliases_work_for_formal_records(self) -> None:
+    def test_interaction_id_links_formal_records(self) -> None:
         self.x(
             "interaction-start",
             "--mode",
-            "with",
+            "joint",
             "--title",
-            "Alias direction",
+            "Formal direction",
             "--agenda",
-            "Exercise interaction-id aliases.",
+            "Exercise interaction-id linking.",
             "--participants",
             "cto",
             "--interaction-id",
-            "inter-alias",
+            "inter-formal",
         )
         self.x(
-            "role-brief",
+            "participant-brief",
             "--interaction-id",
-            "inter-alias",
-            "--role",
+            "inter-formal",
+            "--participant",
             "cto",
             "--title",
-            "CTO alias view",
+            "CTO formal view",
             "--brief-id",
-            "brief-alias",
+            "brief-formal",
             "--recommendation",
-            "Use the alias path.",
+            "Use the formal interaction path.",
             "--rationale",
             "It keeps interaction commands consistent.",
             "--rejected-options",
-            "Do not require discussion wording.",
+            "Do not require legacy wording.",
             "--risks",
             "None.",
             "--decisions-needed",
@@ -341,7 +341,7 @@ class XStateDiscussionTests(XStateTestCase):
             "--implications-for-architect",
             "Architect can consume the accepted intake.",
             "--strongest-objection",
-            "Aliases can obscure the storage path.",
+            "Formal records can obscure the storage path.",
             "--weakest-assumption",
             "Users prefer interaction wording.",
             "--evidence-to-change",
@@ -350,66 +350,66 @@ class XStateDiscussionTests(XStateTestCase):
         self.x(
             "decision",
             "--interaction-id",
-            "inter-alias",
+            "inter-formal",
             "--decision-id",
-            "decision-alias",
+            "decision-formal",
             "--title",
-            "Alias decision",
+            "Formal decision",
             "--decision",
-            "Accept the interaction alias path.",
+            "Accept the interaction path.",
         )
         self.x(
             "architect-intake",
             "--interaction-id",
-            "inter-alias",
+            "inter-formal",
             "--decision-id",
-            "decision-alias",
+            "decision-formal",
             "--title",
-            "Alias intake",
+            "Formal intake",
             "--intake-id",
-            "intake-alias",
+            "intake-formal",
             "--status",
             "accepted",
             "--accepted-direction",
-            "Use interaction aliases for formal records.",
+            "Use interaction IDs for formal records.",
             "--architecture-input",
             "No code path change needed.",
             "--scope-boundaries",
-            "CLI alias behavior only.",
+            "CLI interaction linking only.",
             "--non-goals",
             "No storage migration.",
             "--root-decisions",
-            "Root accepted the alias.",
+            "Root accepted the interaction.",
             "--risks",
             "Naming remains mixed internally.",
             "--handoff-to-architect",
             "Proceed through normal architect flow.",
         )
-        interaction = self.discussion_file("inter-alias").read_text(encoding="utf-8")
-        self.assertIn("brief-alias: cto", interaction)
-        self.assertIn("decision-alias", interaction)
-        self.assertIn("intake-alias", interaction)
-        self.assertIn("Linked Architect Intake: intake-alias", self.decision_file("decision-alias").read_text(encoding="utf-8"))
+        interaction = self.interaction_file("inter-formal").read_text(encoding="utf-8")
+        self.assertIn("brief-formal: cto", interaction)
+        self.assertIn("decision-formal", interaction)
+        self.assertIn("intake-formal", interaction)
+        self.assertIn("Linked Architect Intake: intake-formal", self.decision_file("decision-formal").read_text(encoding="utf-8"))
 
     def test_closed_interaction_rejects_followup_writes(self) -> None:
         self.x(
-            "discussion-start",
+            "interaction-start",
             "--mode",
-            "with",
+            "joint",
             "--title",
             "Closed direction",
             "--agenda",
             "Closed interactions cannot be extended.",
             "--participants",
             "cto",
-            "--discussion-id",
+            "--interaction-id",
             "disc-closed",
             "--status",
             "closed",
         )
         failed = self.x(
-            "discussion-turn",
-            "--discussion-id",
+            "interaction-turn",
+            "--interaction-id",
             "disc-closed",
             "--actor",
             "root",
@@ -426,7 +426,7 @@ class XStateDiscussionTests(XStateTestCase):
             "decision",
             "--title",
             "Closed decision",
-            "--discussion-id",
+            "--interaction-id",
             "disc-closed",
             "--decision",
             "Try to decide after close.",
@@ -435,9 +435,9 @@ class XStateDiscussionTests(XStateTestCase):
         self.assertNotEqual(failed.returncode, 0)
         self.assertIn("interaction disc-closed is closed", failed.stderr + failed.stdout)
 
-    def test_independent_synthesis_requires_ready_role_briefs(self) -> None:
+    def test_independent_synthesis_requires_ready_participant_briefs(self) -> None:
         self.x(
-            "discussion-start",
+            "interaction-start",
             "--mode",
             "independent",
             "--title",
@@ -447,36 +447,36 @@ class XStateDiscussionTests(XStateTestCase):
             "--participants",
             "product-lead",
             "cto",
-            "--discussion-id",
+            "--interaction-id",
             "disc-ready",
         )
-        self.create_role_brief("disc-ready", "product-lead", "brief-product-draft", status="draft")
-        self.create_role_brief("disc-ready", "cto", "brief-cto-ready")
+        self.create_participant_brief("disc-ready", "product-lead", "brief-product-draft", status="draft")
+        self.create_participant_brief("disc-ready", "cto", "brief-cto-ready")
         failed = self.synthesize("disc-ready", check=False)
         self.assertNotEqual(failed.returncode, 0)
-        self.assertIn("requires role briefs for: product-lead", failed.stderr + failed.stdout)
+        self.assertIn("requires participant briefs for: product-lead", failed.stderr + failed.stdout)
 
-        self.create_role_brief("disc-ready", "product-lead", "brief-product-ready")
+        self.create_participant_brief("disc-ready", "product-lead", "brief-product-ready")
         self.synthesize("disc-ready")
-        self.assertIn("Status: synthesized", self.discussion_file("disc-ready").read_text(encoding="utf-8"))
+        self.assertIn("Status: synthesized", self.interaction_file("disc-ready").read_text(encoding="utf-8"))
 
-    def test_with_discussion_turn_role_brief_and_councilor_package(self) -> None:
+    def test_single_participant_turn_brief_and_councilor_package(self) -> None:
         self.x(
-            "discussion-start",
+            "interaction-start",
             "--mode",
-            "with",
+            "joint",
             "--title",
             "CTO direction",
             "--agenda",
             "Evaluate the technical direction before architect intake.",
             "--participants",
             "cto",
-            "--discussion-id",
+            "--interaction-id",
             "disc-cto",
         )
         self.x(
-            "discussion-turn",
-            "--discussion-id",
+            "interaction-turn",
+            "--interaction-id",
             "disc-cto",
             "--actor",
             "root",
@@ -486,10 +486,10 @@ class XStateDiscussionTests(XStateTestCase):
             "Should this start from shared contracts?",
         )
         failed = self.x(
-            "role-brief",
-            "--discussion-id",
+            "participant-brief",
+            "--interaction-id",
             "disc-cto",
-            "--role",
+            "--participant",
             "cto",
             "--title",
             "CTO view",
@@ -517,10 +517,10 @@ class XStateDiscussionTests(XStateTestCase):
         self.assertIn("--strongest-objection is required", failed.stderr + failed.stdout)
 
         self.x(
-            "role-brief",
-            "--discussion-id",
+            "participant-brief",
+            "--interaction-id",
             "disc-cto",
-            "--role",
+            "--participant",
             "cto",
             "--title",
             "CTO view",
@@ -549,26 +549,26 @@ class XStateDiscussionTests(XStateTestCase):
             "package",
             "--role",
             "councilor",
-            "--discussion-id",
+            "--interaction-id",
             "disc-cto",
-            "--council-role",
+            "--participant",
             "cto",
             "--package-id",
             "pkg-cto",
         )
         package = self.package_file("pkg-cto").read_text(encoding="utf-8")
         self.assertIn("Role: councilor", package)
-        self.assertIn("Produce a cto role brief", package)
+        self.assertIn("Produce a cto participant brief", package)
         self.assertIn("Conversation Contract:", package)
         self.assertIn("Visible Turn", package)
         self.assertIn("Do not create execution tasks", package)
-        discussion = self.discussion_file("disc-cto").read_text(encoding="utf-8")
-        self.assertIn("brief-cto: cto", discussion)
-        self.assertIn("pkg-cto: councilor/cto", discussion)
+        interaction = self.interaction_file("disc-cto").read_text(encoding="utf-8")
+        self.assertIn("brief-cto: cto", interaction)
+        self.assertIn("pkg-cto: councilor/cto", interaction)
 
-    def test_independent_discussion_requires_all_role_briefs_before_synthesis(self) -> None:
+    def test_independent_interaction_requires_all_participant_briefs_before_synthesis(self) -> None:
         self.x(
-            "discussion-start",
+            "interaction-start",
             "--mode",
             "independent",
             "--title",
@@ -578,23 +578,23 @@ class XStateDiscussionTests(XStateTestCase):
             "--participants",
             "founder",
             "cto",
-            "--discussion-id",
+            "--interaction-id",
             "disc-independent",
         )
-        self.create_role_brief("disc-independent", "founder", "brief-founder")
+        self.create_participant_brief("disc-independent", "founder", "brief-founder")
         failed = self.synthesize("disc-independent", check=False)
         self.assertNotEqual(failed.returncode, 0)
-        self.assertIn("requires role briefs for: cto", failed.stderr + failed.stdout)
+        self.assertIn("requires participant briefs for: cto", failed.stderr + failed.stdout)
 
-        self.create_role_brief("disc-independent", "cto", "brief-cto")
+        self.create_participant_brief("disc-independent", "cto", "brief-cto")
         self.synthesize("disc-independent")
-        discussion = self.discussion_file("disc-independent").read_text(encoding="utf-8")
-        self.assertIn("Status: synthesized", discussion)
-        self.assertIn("### Strongest Objection", discussion)
+        interaction = self.interaction_file("disc-independent").read_text(encoding="utf-8")
+        self.assertIn("Status: synthesized", interaction)
+        self.assertIn("### Strongest Objection", interaction)
 
     def test_accepted_architect_intake_requires_accepted_decision_and_board_reports_it(self) -> None:
         self.x(
-            "discussion-start",
+            "interaction-start",
             "--mode",
             "joint",
             "--title",
@@ -603,7 +603,7 @@ class XStateDiscussionTests(XStateTestCase):
             "Align founder and CTO direction.",
             "--participants",
             "founder,cto",
-            "--discussion-id",
+            "--interaction-id",
             "disc-intake",
         )
         failed = self.create_intake("disc-intake", "decision-missing", check=False)
@@ -616,12 +616,12 @@ class XStateDiscussionTests(XStateTestCase):
             "Direction decision",
             "--decision-id",
             "decision-direction",
-            "--discussion-id",
+            "--interaction-id",
             "disc-intake",
             "--decision",
             "Use the shared read contract first.",
             "--context",
-            "Root discussion selected the reusable path.",
+            "Root interaction selected the reusable path.",
             "--rationale",
             "It reduces future split semantics.",
             "--consequences",
@@ -641,15 +641,15 @@ class XStateDiscussionTests(XStateTestCase):
         self.x("board", "--write")
         self.assertTrue((self.x_home / "projects/repo/boards/current.md").exists())
 
-        self.x("start", "--run-id", "run-from-intake", "--goal", "Use discussion intake.")
+        self.x("start", "--run-id", "run-from-intake", "--goal", "Use interaction intake.")
         self.x("package", "--role", "architect", "--run-id", "run-from-intake", "--title", "Architect intake", "--package-id", "pkg-architect-intake")
         package = self.package_file("pkg-architect-intake").read_text(encoding="utf-8")
         self.assertIn("Accepted architect intakes", package)
         self.assertIn("intake-direction", package)
 
     def test_architect_package_requires_intake_choice_when_multiple_are_accepted(self) -> None:
-        self.create_discussion_decision_and_intake("disc-a", "decision-a", "intake-a")
-        self.create_discussion_decision_and_intake("disc-b", "decision-b", "intake-b")
+        self.create_interaction_decision_and_intake("disc-a", "decision-a", "intake-a")
+        self.create_interaction_decision_and_intake("disc-b", "decision-b", "intake-b")
         self.x("start", "--run-id", "run-many-intakes", "--goal", "Choose an intake.")
 
         failed = self.x(
@@ -682,19 +682,19 @@ class XStateDiscussionTests(XStateTestCase):
         self.assertIn("intake-a", package)
         self.assertNotIn("intake-b: decision=decision-b", package)
 
-    def create_role_brief(self, discussion_id: str, role: str, brief_id: str, *, status: str = "ready") -> None:
+    def create_participant_brief(self, interaction_id: str, participant: str, brief_id: str, *, status: str = "ready") -> None:
         self.x(
-            "role-brief",
-            "--discussion-id",
-            discussion_id,
-            "--role",
-            role,
+            "participant-brief",
+            "--interaction-id",
+            interaction_id,
+            "--participant",
+            participant,
             "--title",
-            f"{role} brief",
+            f"{participant} brief",
             "--brief-id",
             brief_id,
             "--recommendation",
-            f"{role} recommends a bounded direction.",
+            f"{participant} recommends a bounded direction.",
             "--rationale",
             "The direction is reversible.",
             "--rejected-options",
@@ -715,13 +715,13 @@ class XStateDiscussionTests(XStateTestCase):
             status,
         )
 
-    def synthesize(self, discussion_id: str, *, check: bool = True):
+    def synthesize(self, interaction_id: str, *, check: bool = True):
         return self.x(
-            "discussion-synthesize",
-            "--discussion-id",
-            discussion_id,
+            "interaction-summarize",
+            "--interaction-id",
+            interaction_id,
             "--agreements",
-            "Both roles favor a bounded first direction.",
+            "Both participants favor a bounded first direction.",
             "--conflicts",
             "Founder wants speed; CTO wants contract clarity.",
             "--rejected-options",
@@ -741,11 +741,11 @@ class XStateDiscussionTests(XStateTestCase):
             check=check,
         )
 
-    def create_intake(self, discussion_id: str, decision_id: str, *, check: bool = True):
+    def create_intake(self, interaction_id: str, decision_id: str, *, check: bool = True):
         return self.x(
             "architect-intake",
-            "--discussion-id",
-            discussion_id,
+            "--interaction-id",
+            interaction_id,
             "--decision-id",
             decision_id,
             "--title",
@@ -771,19 +771,19 @@ class XStateDiscussionTests(XStateTestCase):
             check=check,
         )
 
-    def create_discussion_decision_and_intake(self, discussion_id: str, decision_id: str, intake_id: str) -> None:
+    def create_interaction_decision_and_intake(self, interaction_id: str, decision_id: str, intake_id: str) -> None:
         self.x(
-            "discussion-start",
+            "interaction-start",
             "--mode",
-            "with",
+            "joint",
             "--title",
-            discussion_id,
+            interaction_id,
             "--agenda",
             "Prepare architect intake.",
             "--participants",
             "cto",
-            "--discussion-id",
-            discussion_id,
+            "--interaction-id",
+            interaction_id,
         )
         self.x(
             "decision",
@@ -791,8 +791,8 @@ class XStateDiscussionTests(XStateTestCase):
             decision_id,
             "--decision-id",
             decision_id,
-            "--discussion-id",
-            discussion_id,
+            "--interaction-id",
+            interaction_id,
             "--decision",
             f"Accept direction {decision_id}.",
             "--context",
@@ -804,8 +804,8 @@ class XStateDiscussionTests(XStateTestCase):
         )
         self.x(
             "architect-intake",
-            "--discussion-id",
-            discussion_id,
+            "--interaction-id",
+            interaction_id,
             "--decision-id",
             decision_id,
             "--title",

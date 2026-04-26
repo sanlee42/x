@@ -1,9 +1,9 @@
-# x Role Brief: {brief_id}
+# x Participant Brief: {brief_id}
 
 Status: {status}
-Role: {role}
+Participant: {role}
 Date: {date}
-Linked Discussion: {discussion_id}
+Linked Interaction: {discussion_id}
 
 ## Recommendation
 
@@ -43,4 +43,4 @@ Linked Discussion: {discussion_id}
 
 ## Event Log
 
-- {created_at}: role brief created.
+- {created_at}: participant brief created.

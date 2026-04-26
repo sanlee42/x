@@ -11,26 +11,24 @@ Use this when `$x architect` starts or `$x resume` needs to continue execution w
 
 ## Optional Interaction Handoff
 
-Root-facing interaction is an advisory layer before architect execution. Use it when root asks for `$x council`, `$x council with <roles>`, `$x with <role>`, or custom role discussion before committing to an architecture direction. The default company council is `founder`, `cto`, `product-lead`, `market-intelligence`, `gtm`, and `challenger`.
+Root-facing interaction is an advisory layer before architect execution. Use it when root asks for `$x council` or `$x council with <participants>` before committing to an architecture direction. The default council is `founder`, `cto`, `product-lead`, `market-intelligence`, `gtm`, and `challenger`.
 
 Typical interaction state helper flow:
 
 ```bash
-python ~/.codex/skills/x/scripts/x_state.py role-list
+python ~/.codex/skills/x/scripts/x_state.py participant-list
 python ~/.codex/skills/x/scripts/x_state.py interaction-start --mode joint --title "<topic>" --agenda "<root thesis or question>" --participants council
 # For `$x council with founder, gtm, challenger: <topic>`, use explicit participants:
 python ~/.codex/skills/x/scripts/x_state.py interaction-start --mode joint --title "<topic>" --agenda "<root thesis or question>" --participants founder gtm challenger
 python ~/.codex/skills/x/scripts/x_state.py interaction-turn --interaction-id "<interaction-id>" --actor root --turn-kind statement --body "<root thesis>"
-python ~/.codex/skills/x/scripts/x_state.py package --role councilor --interaction-id "<interaction-id>" --council-role cto
-python ~/.codex/skills/x/scripts/x_state.py role-brief --interaction-id "<interaction-id>" --role cto --title "<brief>" --recommendation "<stance>" --rationale "<why>" --rejected-options "<rejected>" --risks "<risks>" --decisions-needed "<root decisions>" --implications-for-architect "<handoff notes>" --strongest-objection "<objection>" --weakest-assumption "<assumption>" --evidence-to-change "<evidence>"
+python ~/.codex/skills/x/scripts/x_state.py package --role councilor --interaction-id "<interaction-id>" --participant cto
+python ~/.codex/skills/x/scripts/x_state.py participant-brief --interaction-id "<interaction-id>" --participant cto --title "<brief>" --recommendation "<stance>" --rationale "<why>" --rejected-options "<rejected>" --risks "<risks>" --decisions-needed "<root decisions>" --implications-for-architect "<handoff notes>" --strongest-objection "<objection>" --weakest-assumption "<assumption>" --evidence-to-change "<evidence>"
 python ~/.codex/skills/x/scripts/x_state.py interaction-summarize --interaction-id "<interaction-id>" --agreements "<agreements>" --core-judgment "<core judgment>" --key-arguments "<arguments>" --conflicts "<conflicts>" --rejected-options "<rejected>" --root-decisions-needed "<decisions>" --recommended-direction "<proposal>" --architect-intake-draft "<draft>" --strongest-objection "<objection>" --weakest-assumption "<assumption>" --evidence-to-change "<evidence>" --document-use-notes "<document notes>"
 python ~/.codex/skills/x/scripts/x_state.py decision --interaction-id "<interaction-id>" --title "<decision>" --decision "<accepted direction>"
 python ~/.codex/skills/x/scripts/x_state.py architect-intake --interaction-id "<interaction-id>" --decision-id "<decision-id>" --status accepted --title "<intake>" --accepted-direction "<accepted direction>" --architecture-input "<architect input>" --scope-boundaries "<scope>" --non-goals "<non-goals>" --root-decisions "<decisions>" --risks "<risks>" --handoff-to-architect "<handoff>"
 ```
 
-Compatibility commands and fields still use `discussion` naming in some places because runtime state is stored under `discussions/<id>.md`, but new root-facing docs and examples should prefer `interaction-*` and `--interaction-id`.
-
-Interaction role views must not create Engineer Tasks, start attempts, manage lanes, assign reviewers, or issue architect directives. They produce compressed advisory state only. Interaction summaries write `Room Essence` in the existing `Synthesis` section; accepted architect intake is the handoff into the architect room.
+Interaction participant views must not create Engineer Tasks, start attempts, manage lanes, assign reviewers, or issue architect directives. They produce compressed advisory state only. Interaction summaries write `Room Essence` in the existing `Synthesis` section; accepted architect intake is the handoff into the architect room.
 
 ## Main Flow
 
@@ -101,7 +99,7 @@ Interaction role views must not create Engineer Tasks, start attempts, manage la
     python ~/.codex/skills/x/scripts/x_state.py package --role reviewer --task-id "<task-id>" --attempt-id "<attempt-id>"
     ```
     If `--diff` and `--diff-stat` are omitted, the script captures the lane worktree diff from the lane/integration merge-base. Reviewer packages reject untracked lane files because they would not be captured in the review or integration diff.
-    Recommended reviewer handoff: `--reviewer-backend codex-native` runs `codex review --base <lane-base> -` from the lane worktree and records the review output directly without embedding the full raw diff in a package. The CLI default remains `package` for compatibility.
+    Recommended reviewer handoff: `--reviewer-backend codex-native` runs `codex review --base <lane-base> -` from the lane worktree and records the review output directly without embedding the full raw diff in a package. The CLI default remains `package`.
 15. Record code review:
     ```bash
     python ~/.codex/skills/x/scripts/x_state.py review --title "<review>" --attempt-id "<attempt-id>" --summary "<summary>" --recommendation ready --reviewed-diff "<diff evidence>" --verification "<assessment>"

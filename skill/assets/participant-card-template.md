@@ -1,6 +1,6 @@
-# x Role Card: {role}
+# x Participant Card: {role}
 
-Role: {role}
+Participant: {role}
 Updated At: {updated_at}
 
 ## Responsibilities

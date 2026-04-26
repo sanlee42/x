@@ -1,6 +1,6 @@
-# x Role Card: product-lead
+# x Participant Card: product-lead
 
-Role: product-lead
+Participant: product-lead
 Updated At: default
 
 ## Responsibilities
