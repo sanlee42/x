@@ -1,6 +1,6 @@
 ---
 name: x
-description: Use for the repository architect-to-code loop when the user says "$x architect", "$x status", "$x resume", "$x checkpoint", or "$x close" and wants Codex to replace manual architecture discussion, codebase investigation, technical design, implementation, review, fix loop, and merge-back recommendation.
+description: Use for the repository architect-to-code loop when the user says "$x", "$x help", "$x architect", "$x status", "$x resume", "$x checkpoint", or "$x close" and wants Codex to show x commands or replace manual architecture discussion, codebase investigation, technical design, implementation, review, fix loop, and merge-back recommendation.
 ---
 
 # x
@@ -19,15 +19,40 @@ interaction/discussion -> root decision -> architect intake -> run -> Architect 
 
 Use this skill when the user says:
 
+- `$x`, `$x help`, `$x commands`, or `$x ?`
 - `$x architect`, `$x architect: <goal>`, or `x architect`
 - `$x status`, `$x resume`, `$x checkpoint`, `$x close`
 - `$x discussion`, `$x with <role>`, `$x council`, `$x product`, `$x technical`, `$x strategy`, or another configured interaction role for root-facing direction interaction before architecture
 
 Do not use `$x start engineering` as the user-facing entry. `Engineering Loop` is the lower execution layer behind the architect room.
 
+## Fast Root Help
+
+When root says exactly `$x`, `$x help`, `$x commands`, or `$x ?`, answer from this section only. Do not read references, role prompts, repo files, runtime state, or run tools. Do not create or mutate workflow state.
+
+Reply with this concise root-facing command menu:
+
+```text
+$x architect[: <goal>]      start or continue architect-to-code work
+$x status                   show current x state
+$x resume                   resume the current run
+$x checkpoint               write a progress checkpoint
+$x close                    close with gates and recommendation
+
+$x discussion: <topic>      discuss direction before architecture
+$x council: <topic>         synthesize multiple role views
+$x with <role>: <question>  ask one configured role
+$x product: <question>      product shape and user path
+$x technical: <question>    technical boundary and risk
+$x strategy: <question>     priority, sequencing, stop conditions
+$x challenger: <question>   challenge assumptions
+```
+
+Mention that `x_state.py` commands are internal state tools, not root-facing commands.
+
 ## Fresh Instruction Reload
 
-At the start of every `$x architect`, `$x discussion`, `$x with <role>`, `$x council`, `$x product`, `$x technical`, `$x strategy`, `$x status`, `$x resume`, `$x checkpoint`, or `$x close` turn, main agent must reread the currently installed `~/.codex/skills/x/SKILL.md`, relevant role prompts from `~/.codex/agents/`, and configured interaction role cards before deciding what to do. Do not rely on stale remembered x workflow rules.
+At the start of every non-help `$x architect`, `$x discussion`, `$x with <role>`, `$x council`, `$x product`, `$x technical`, `$x strategy`, `$x status`, `$x resume`, `$x checkpoint`, or `$x close` turn, main agent must reread the currently installed `~/.codex/skills/x/SKILL.md`, relevant role prompts from `~/.codex/agents/`, and configured interaction role cards before deciding what to do. Do not rely on stale remembered x workflow rules.
 
 Newly spawned architect, engineer, and reviewer agents must use the latest installed prompts. If a role agent was spawned before the latest x instruction change, treat its output as potentially stale for changed workflow behavior and use a fresh role package/subagent for decisions affected by the change.
 

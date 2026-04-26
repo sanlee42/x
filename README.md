@@ -55,9 +55,13 @@ python ~/.codex/skills/x/scripts/x_state.py status
 In Codex, use:
 
 ```text
+$x
+$x help
 $x architect
 $x architect: <goal>
 ```
+
+`$x`, `$x help`, `$x commands`, and `$x ?` return a static root-facing command menu without reading repo/runtime state or mutating workflow state.
 
 For root-facing direction work before architecture, `$x` also supports a durable interaction layer. Root normally asks in natural language:
 
