@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import subprocess
 from pathlib import Path
 
 from x_state_common import *
@@ -9,6 +10,7 @@ from x_state_directives import lane_work_directive_failures, merge_ready_directi
 from x_state_execution import lane_display_id, lane_for_attempt, lane_status_summary, lane_worktree, latest_execution_plan_for_run
 from x_state_integration import lane_integration_base, untracked_files
 from x_state_mailbox import open_mailbox_summary
+from x_state_reviews import command_review
 from x_state_discussion import (
     compact,
     discussion_summary,
@@ -19,6 +21,9 @@ from x_state_discussion import (
     role_card_content,
     role_briefs_for_discussion,
 )
+
+
+NATIVE_REVIEW_RECOMMENDATIONS = {"ready", "changes-requested", "blocked"}
 
 
 def project_context(root: Path) -> str:
@@ -280,6 +285,238 @@ def execution_summary(run: Path, lane: Path | None = None) -> str:
     return "\n".join(lines)
 
 
+def native_reviewer_prompt(
+    root: Path,
+    *,
+    run: Path,
+    task: Path,
+    attempt: Path,
+    review: Path | None,
+    lane: Path,
+    lane_base: str,
+    verification: str,
+    notes: str,
+) -> str:
+    contract = latest_for_run(root, "contracts", run.stem)
+    execution_plan = latest_execution_plan_for_run(root, run.stem)
+    contract_text = contract.read_text(encoding="utf-8") if contract else ""
+    plan_text = execution_plan.read_text(encoding="utf-8") if execution_plan else ""
+    lane_text = lane.read_text(encoding="utf-8")
+    task_text = task.read_text(encoding="utf-8")
+    attempt_text = attempt.read_text(encoding="utf-8")
+    review_text = review.read_text(encoding="utf-8") if review else ""
+    source_review = (
+        f"{review.stem}: {compact(section_content(review_text, 'Summary'), limit=500)}"
+        if review
+        else "none"
+    )
+    return f"""# x Native Codex Reviewer Handoff
+
+Review one x lane attempt with native Codex review. The raw git diff is intentionally not included in this prompt; inspect it through:
+
+codex review --base {lane_base} -
+
+Project Context Files:
+{project_context(root)}
+
+Run:
+- ID: {run.stem}
+- Execution: {execution_summary(run, lane)}
+
+Technical Contract Summary:
+- Contract: {contract.stem if contract else 'none'}
+- Goal: {compact(section_content(contract_text, 'Goal'), limit=700)}
+- Allowed Boundaries: {compact(section_content(contract_text, 'Allowed Boundaries'), limit=700)}
+- Forbidden Boundaries: {compact(section_content(contract_text, 'Forbidden Boundaries'), limit=700)}
+- Required Verification: {compact(section_content(contract_text, 'Required Verification'), limit=700)}
+- Loopback Conditions: {compact(section_content(contract_text, 'Loopback Conditions'), limit=700)}
+
+Architect Execution Plan:
+- Plan: {execution_plan.stem if execution_plan else 'none'}
+- Reviewer Criteria: {compact(section_content(plan_text, 'Reviewer Criteria'), limit=700)}
+- Verification Matrix: {compact(section_content(plan_text, 'Verification Matrix'), limit=700)}
+- Loopback Triggers: {compact(section_content(plan_text, 'Loopback Triggers'), limit=700)}
+
+Lane Scope:
+- Lane: {lane_display_id(lane)}
+- Worktree: {header_value(lane_text, 'Worktree') or 'unknown'}
+- Branch: {header_value(lane_text, 'Branch') or 'unknown'}
+- Base: {lane_base}
+- Allowed Scope: {compact(section_content(lane_text, 'Allowed Scope'), limit=700)}
+- Forbidden Scope: {compact(section_content(lane_text, 'Forbidden Scope'), limit=700)}
+- Done Evidence: {compact(section_content(lane_text, 'Done Evidence'), limit=700)}
+
+Engineer Task:
+- Task: {task.stem}
+- Goal: {compact(section_content(task_text, 'Goal'), limit=700)}
+- Requirements: {compact(section_content(task_text, 'Implementation Requirements'), limit=900)}
+- Required Verification: {compact(section_content(task_text, 'Required Verification'), limit=700)}
+
+Attempt Result:
+- Attempt: {attempt.stem}
+- Changed Files: {compact(section_content(attempt_text, 'Changed Files'), limit=700)}
+- Summary: {compact(section_content(attempt_text, 'Implementation Summary'), limit=900)}
+- Blockers: {compact(section_content(attempt_text, 'Blockers'), limit=700)}
+- Residual Risk: {compact(section_content(attempt_text, 'Residual Risk'), limit=700)}
+
+Source Review:
+{source_review}
+
+Verification:
+{verification}
+
+Notes:
+{notes}
+
+Expected x Review Return Format:
+recommendation: ready | changes-requested | blocked
+
+blocking findings: file/line evidence, or "- None."
+non-blocking findings: finding, or "- None."
+verification assessment: what was checked and what remains unverified.
+residual risk: remaining risk for main/architect.
+next action: run merge-ready gate, start a fix attempt, loop back to architect, or escalate to root.
+"""
+
+
+def run_codex_native_review(lane_tree: Path, lane_base: str, prompt: str) -> str:
+    command = ["codex", "review", "--base", lane_base, "-"]
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=lane_tree,
+            input=prompt,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+    except FileNotFoundError:
+        raise SystemExit("codex-native reviewer backend requires `codex` executable on PATH")
+    if completed.returncode != 0:
+        details = []
+        if completed.stdout.strip():
+            details.append("stdout:\n" + completed.stdout.strip())
+        if completed.stderr.strip():
+            details.append("stderr:\n" + completed.stderr.strip())
+        suffix = "\n" + "\n\n".join(details) if details else ""
+        raise SystemExit(f"codex review failed with exit {completed.returncode}{suffix}")
+    return completed.stdout.strip() or "No native review output."
+
+
+def native_review_recommendation(output: str) -> str | None:
+    for line in output.splitlines():
+        normalized = line.strip().lower()
+        if normalized.startswith(("- ", "* ")):
+            normalized = normalized[2:].strip()
+        if not normalized.startswith("recommendation:"):
+            continue
+        value = normalized.split(":", 1)[1].strip().strip("`*_ ")
+        value = value[:-1] if value.endswith(".") else value
+        if value in NATIVE_REVIEW_RECOMMENDATIONS:
+            return value
+    return None
+
+
+def indented_native_output(output: str) -> str:
+    body = output.strip() or "No native review output."
+    return "\n".join(f"    {line}" if line else "" for line in body.splitlines())
+
+
+def native_review_summary(recommendation: str, explicit_recommendation: bool) -> str:
+    if explicit_recommendation:
+        return f"Native codex review completed with recommendation: {recommendation}."
+    return (
+        "Native codex review completed without an explicit recommendation line; "
+        "main must interpret and normalize the output before proceeding."
+    )
+
+
+def native_review_findings(output: str, recommendation: str, explicit_recommendation: bool) -> tuple[str, str]:
+    raw_output = "Native Codex review output:\n\n" + indented_native_output(output)
+    if recommendation == "ready" and explicit_recommendation:
+        return "- None.", raw_output
+    if explicit_recommendation:
+        return raw_output, "- See blocking findings for the native review output."
+    return (
+        "No explicit `recommendation: ...` line was found. Main must interpret and normalize this output before proceeding.\n\n"
+        + raw_output,
+        "- None.",
+    )
+
+
+def record_codex_native_review(
+    root: Path,
+    args: argparse.Namespace,
+    *,
+    run: Path,
+    task: Path,
+    attempt: Path,
+    review: Path | None,
+    lane: Path,
+    lane_tree: Path,
+    lane_base: str,
+    verification: str,
+    notes: str,
+) -> None:
+    attempt_text = attempt.read_text(encoding="utf-8")
+    if not attempt_has_result(attempt_text):
+        raise SystemExit(f"attempt has no result evidence: {attempt.stem}")
+    prompt = native_reviewer_prompt(
+        root,
+        run=run,
+        task=task,
+        attempt=attempt,
+        review=review,
+        lane=lane,
+        lane_base=lane_base,
+        verification=verification,
+        notes=notes,
+    )
+    if args.dry_run:
+        print(prompt)
+        return
+    output = run_codex_native_review(lane_tree, lane_base, prompt)
+    parsed_recommendation = native_review_recommendation(output)
+    explicit_recommendation = parsed_recommendation is not None
+    recommendation = parsed_recommendation or "blocked"
+    blocking_findings, non_blocking_findings = native_review_findings(output, recommendation, explicit_recommendation)
+    no_recommendation_next_action = (
+        "Interpret and normalize native Codex review output before proceeding; "
+        "no explicit recommendation line was provided."
+    )
+    review_args = argparse.Namespace(
+        title=args.title or "Native Codex review",
+        summary=native_review_summary(recommendation, explicit_recommendation),
+        recommendation=recommendation,
+        reviewed_diff=(
+            f"Native Codex reviewed the lane git diff via `codex review --base {lane_base} -` "
+            f"from `{lane_tree}`. The full raw diff was intentionally not embedded in the x prompt."
+        ),
+        verification=(
+            "Attempt verification supplied to native review:\n\n"
+            f"{verification}\n\n"
+            "Native review command completed successfully."
+        ),
+        blocking_findings=blocking_findings,
+        non_blocking_findings=non_blocking_findings,
+        residual_risk=(
+            "Native review output requires main normalization before proceeding."
+            if not explicit_recommendation
+            else "See native review output."
+        ),
+        status="open",
+        run_id=run.stem,
+        attempt_id=attempt.stem,
+        review_id=f"{today()}-codex-native-{attempt.stem}",
+        loopback_target=None,
+        needs_user=None,
+        next_action=no_recommendation_next_action if not explicit_recommendation else args.next_action,
+        dry_run=args.dry_run,
+    )
+    command_review(review_args)
+
+
 def accepted_intake_paths(root: Path) -> list[Path]:
     directory = state_dirs(root)["architect-intakes"]
     if not directory.exists():
@@ -325,6 +562,8 @@ def accepted_intake_summary_lines(intakes: list[Path]) -> str:
 
 def command_package(args: argparse.Namespace) -> None:
     root = repo_root(Path.cwd())
+    if args.reviewer_backend != "package" and args.role != "reviewer":
+        raise SystemExit("--reviewer-backend is only valid with --role reviewer")
     if args.role == "councilor":
         command_councilor_package(root, args)
         return
@@ -365,19 +604,38 @@ def command_package(args: argparse.Namespace) -> None:
         if lane_status in {"architect-paused", "replan-required"}:
             raise SystemExit(f"{args.role} package blocked: lane {lane_display_id(lane)} status is {lane_status}")
         package_worktree = lane_worktree(lane)
-    diff_stat = optional_text_arg(args, "diff_stat", "")
-    diff = optional_text_arg(args, "diff", "")
+    diff_stat = ""
+    diff = ""
+    verification = optional_text_arg(args, "verification", section_content(attempt.read_text(encoding="utf-8"), "Verification") if attempt else "Not provided.")
+    notes = optional_text_arg(args, "notes", "None.")
     if args.role == "reviewer" and package_worktree is not None:
         untracked = untracked_files(package_worktree)
         if untracked:
             raise SystemExit("reviewer package cannot capture untracked lane files: " + ", ".join(untracked))
         lane_base = lane_integration_base(package_worktree, header_value(lane.read_text(encoding="utf-8"), "Integration Branch") or "HEAD")
+        if args.reviewer_backend == "codex-native":
+            if task is None or attempt is None or lane is None:
+                raise SystemExit("codex-native reviewer backend requires --task-id and --attempt-id")
+            record_codex_native_review(
+                root,
+                args,
+                run=run,
+                task=task,
+                attempt=attempt,
+                review=review,
+                lane=lane,
+                lane_tree=package_worktree,
+                lane_base=lane_base,
+                verification=verification,
+                notes=notes,
+            )
+            return
+        diff_stat = optional_text_arg(args, "diff_stat", "")
+        diff = optional_text_arg(args, "diff", "")
         if not has_content(diff_stat):
             diff_stat = git_output(package_worktree, "diff", "--stat", lane_base, default="Not provided.")
         if not has_content(diff):
             diff = git_output(package_worktree, "diff", lane_base, default="Not provided.")
-    verification = optional_text_arg(args, "verification", section_content(attempt.read_text(encoding="utf-8"), "Verification") if attempt else "Not provided.")
-    notes = optional_text_arg(args, "notes", "None.")
     architect_intakes = selected_accepted_intake_paths(root, args.architect_intake_id) if args.role == "architect" else None
     purpose, payload, expected_return = package_payload(
         root,
@@ -484,7 +742,7 @@ def command_councilor_package(root: Path, args: argparse.Namespace) -> None:
         "Return `Visible Turn` first: a conversational reply from this role addressed to root and/or named participants. "
         "Then follow the role card's `Output Format`, while still including role-brief fields: stance/recommendation, rationale, "
         "objections or rejected options, risks, decisions needed, implications for architect, strongest objection, weakest assumption, "
-        "and evidence that would change the recommendation. "
+        "evidence that would change the recommendation, and document-use notes for the later Room Essence. "
         "Do not create execution tasks, manage lanes, or bypass architect."
     )
     package_id = args.package_id or f"{today()}-councilor-{council_role}-{slug(args.title or discussion.stem, 'package')}"

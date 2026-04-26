@@ -431,6 +431,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     package = sub.add_parser("package", help="create a role input package")
     package.add_argument("--role", required=True, choices=["architect", "engineer", "reviewer", "councilor"])
+    package.add_argument("--reviewer-backend", default="package", choices=["package", "codex-native"])
     package.add_argument("--run-id")
     package.add_argument("--discussion-id")
     package.add_argument("--interaction-id", dest="discussion_id")

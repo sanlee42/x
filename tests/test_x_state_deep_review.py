@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import unittest
 
 from tests.x_state_test_base import XStateTestCase
@@ -55,6 +56,62 @@ class XStateDeepReviewTests(XStateTestCase):
             "--verification",
             "Verification sufficient.",
         )
+
+    def record_attempt_for_native_review(self, run_id: str, scope: str, marker: str) -> None:
+        self.prepare_materialized_run(run_id, scope)
+        self.x("attempt-start", "--task-id", "task-llm", "--kind", "implementation", "--title", "Implement marker")
+        readme = self.lane_worktree(scope) / "README.md"
+        readme.write_text(f"# repo\n\n{marker}\n", encoding="utf-8")
+        self.x(
+            "attempt-result",
+            "--attempt-id",
+            "task-llm-a1",
+            "--changed-files",
+            "README.md",
+            "--summary",
+            "Updated README.",
+            "--verification",
+            "Inspected README.",
+            "--residual-risk",
+            "None.",
+        )
+
+    def install_fake_codex(self, output: str):
+        bin_dir = self.base / "fake-bin"
+        log_dir = self.base / "fake-codex-log"
+        bin_dir.mkdir()
+        log_dir.mkdir()
+        executable = bin_dir / "codex"
+        executable.write_text(
+            """#!/usr/bin/env python3
+import os
+import pathlib
+import sys
+
+log_dir = pathlib.Path(os.environ["FAKE_CODEX_LOG_DIR"])
+log_dir.mkdir(parents=True, exist_ok=True)
+(log_dir / "argv.txt").write_text("\\n".join(sys.argv), encoding="utf-8")
+(log_dir / "cwd.txt").write_text(os.getcwd(), encoding="utf-8")
+(log_dir / "stdin.txt").write_text(sys.stdin.read(), encoding="utf-8")
+print(os.environ.get("FAKE_CODEX_OUTPUT", ""))
+""",
+            encoding="utf-8",
+        )
+        executable.chmod(0o755)
+        saved_env = {key: os.environ.get(key) for key in ("PATH", "FAKE_CODEX_LOG_DIR", "FAKE_CODEX_OUTPUT")}
+
+        def restore_env() -> None:
+            for key, value in saved_env.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
+        self.addCleanup(restore_env)
+        os.environ["PATH"] = str(bin_dir) + os.pathsep + os.environ.get("PATH", "")
+        os.environ["FAKE_CODEX_LOG_DIR"] = str(log_dir)
+        os.environ["FAKE_CODEX_OUTPUT"] = output
+        return log_dir
 
     def test_plan_status_update_cannot_target_plan_from_another_run(self) -> None:
         self.prepare_materialized_run("run-one", "one")
@@ -149,6 +206,100 @@ class XStateDeepReviewTests(XStateTestCase):
         failed = self.x("package", "--role", "reviewer", "--run-id", "run-untracked", "--task-id", "task-llm", "--attempt-id", "task-llm-a1", check=False)
         self.assertNotEqual(failed.returncode, 0)
         self.assertIn("reviewer package cannot capture untracked lane files: new-file.txt", failed.stderr + failed.stdout)
+
+    def test_codex_native_reviewer_invokes_codex_and_records_ready_review(self) -> None:
+        log_dir = self.install_fake_codex(
+            "recommendation: ready\n\nblocking findings:\n- None.\n\nverification assessment:\n- Looks sufficient."
+        )
+        self.record_attempt_for_native_review("run-native-ready", "native-ready", "NATIVE_DIFF_SENTINEL")
+        lane_tree = self.lane_worktree("native-ready")
+        lane_base = self.git("merge-base", "HEAD", "feat/native-ready", cwd=lane_tree).stdout.strip()
+
+        self.x(
+            "package",
+            "--role",
+            "reviewer",
+            "--reviewer-backend",
+            "codex-native",
+            "--run-id",
+            "run-native-ready",
+            "--task-id",
+            "task-llm",
+            "--attempt-id",
+            "task-llm-a1",
+        )
+
+        argv = (log_dir / "argv.txt").read_text(encoding="utf-8").splitlines()
+        self.assertEqual(argv[1:], ["review", "--base", lane_base, "-"])
+        self.assertEqual((log_dir / "cwd.txt").read_text(encoding="utf-8"), str(lane_tree))
+        stdin = (log_dir / "stdin.txt").read_text(encoding="utf-8")
+        self.assertIn("Technical Contract Summary:", stdin)
+        self.assertIn("Engineer Task:", stdin)
+        self.assertIn("Attempt Result:", stdin)
+        self.assertIn("Expected x Review Return Format:", stdin)
+        self.assertNotIn("NATIVE_DIFF_SENTINEL", stdin)
+
+        reviews = sorted((self.x_home / "projects/repo/reviews").glob("*.md"))
+        self.assertEqual(len(reviews), 1)
+        review_text = reviews[0].read_text(encoding="utf-8")
+        self.assertIn("Recommendation: ready", review_text)
+        self.assertIn("Linked Run: run-native-ready", review_text)
+        self.assertIn("Linked Attempt: task-llm-a1", review_text)
+        self.assertIn("recommendation: ready", review_text)
+        self.assertIn("codex review --base", review_text)
+
+    def test_codex_native_reviewer_defaults_to_blocked_without_explicit_recommendation(self) -> None:
+        self.install_fake_codex("Looks okay, but this output does not have the required structured recommendation line.")
+        self.record_attempt_for_native_review("run-native-blocked", "native-blocked", "blocked sentinel")
+
+        self.x(
+            "package",
+            "--role",
+            "reviewer",
+            "--reviewer-backend",
+            "codex-native",
+            "--run-id",
+            "run-native-blocked",
+            "--task-id",
+            "task-llm",
+            "--attempt-id",
+            "task-llm-a1",
+        )
+
+        reviews = sorted((self.x_home / "projects/repo/reviews").glob("*.md"))
+        self.assertEqual(len(reviews), 1)
+        review_text = reviews[0].read_text(encoding="utf-8")
+        self.assertIn("Recommendation: blocked", review_text)
+        self.assertIn("No explicit `recommendation: ...` line was found.", review_text)
+        self.assertIn("Looks okay", review_text)
+        run_text = self.run_file("run-native-blocked").read_text(encoding="utf-8")
+        self.assertIn("Interpret and normalize native Codex review output before proceeding", run_text)
+
+    def test_codex_native_reviewer_rejects_untracked_files_before_invoking_codex(self) -> None:
+        log_dir = self.install_fake_codex("recommendation: ready")
+        self.prepare_materialized_run("run-native-untracked", "native-untracked")
+        self.x("attempt-start", "--task-id", "task-llm", "--kind", "implementation", "--title", "Add file")
+        (self.lane_worktree("native-untracked") / "new-file.txt").write_text("new\n", encoding="utf-8")
+        self.x("attempt-result", "--attempt-id", "task-llm-a1", "--changed-files", "new-file.txt", "--summary", "Added new file.", "--verification", "Inspected file.", "--residual-risk", "None.")
+
+        failed = self.x(
+            "package",
+            "--role",
+            "reviewer",
+            "--reviewer-backend",
+            "codex-native",
+            "--run-id",
+            "run-native-untracked",
+            "--task-id",
+            "task-llm",
+            "--attempt-id",
+            "task-llm-a1",
+            check=False,
+        )
+
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn("reviewer package cannot capture untracked lane files: new-file.txt", failed.stderr + failed.stdout)
+        self.assertFalse((log_dir / "argv.txt").exists())
 
 
 if __name__ == "__main__":

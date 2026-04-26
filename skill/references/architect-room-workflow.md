@@ -99,6 +99,7 @@ Interaction role views must not create Engineer Tasks, start attempts, manage la
     python ~/.codex/skills/x/scripts/x_state.py package --role reviewer --task-id "<task-id>" --attempt-id "<attempt-id>"
     ```
     If `--diff` and `--diff-stat` are omitted, the script captures the lane worktree diff from the lane/integration merge-base. Reviewer packages reject untracked lane files because they would not be captured in the review or integration diff.
+    `--reviewer-backend codex-native` is an opt-in alternative that runs `codex review --base <lane-base> -` from the lane worktree and records the review output directly without embedding the full raw diff in a package.
 15. Record code review:
     ```bash
     python ~/.codex/skills/x/scripts/x_state.py review --title "<review>" --attempt-id "<attempt-id>" --summary "<summary>" --recommendation ready --reviewed-diff "<diff evidence>" --verification "<assessment>"
