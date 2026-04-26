@@ -34,12 +34,12 @@ AGENTS.md
 scripts/install-local.sh
 ```
 
-The installer links:
+The installer links this checkout, not a hard-coded `~/workspace/x` path:
 
-- `~/.codex/skills/x -> ~/workspace/x/skill`
-- `~/.codex/agents/architect.toml -> ~/workspace/x/agents/architect.toml`
-- `~/.codex/agents/engineer.toml -> ~/workspace/x/agents/engineer.toml`
-- `~/.codex/agents/reviewer.toml -> ~/workspace/x/agents/reviewer.toml`
+- `~/.codex/skills/x -> <this-checkout>/skill`
+- `~/.codex/agents/architect.toml -> <this-checkout>/agents/architect.toml`
+- `~/.codex/agents/engineer.toml -> <this-checkout>/agents/engineer.toml`
+- `~/.codex/agents/reviewer.toml -> <this-checkout>/agents/reviewer.toml`
 
 Restart Codex after installing if it does not discover new skills or agents.
 
@@ -57,8 +57,13 @@ In Codex, use:
 ```text
 $x
 $x help
+$x commands
 $x architect
 $x architect: <goal>
+$x status
+$x resume
+$x checkpoint
+$x close
 ```
 
 `$x`, `$x help`, `$x commands`, and `$x ?` return a static root-facing command menu without reading repo/runtime state or mutating workflow state.
@@ -69,6 +74,9 @@ For root-facing direction work before architecture, `$x` also supports a durable
 $x product: I think ChatBI should work like this; push on the product shape.
 $x technical: challenge this technical boundary.
 $x strategy: is this direction worth doing now?
+$x challenger: find the weak assumption in this plan.
+$x with architect: pressure-test this execution shape.
+$x council: compare these two directions from product, technical, and strategy angles.
 $x discussion: bring product, technical, and strategy together on this direction.
 ```
 
@@ -86,7 +94,7 @@ python ~/.codex/skills/x/scripts/x_state.py architect-intake --interaction-id <i
 python ~/.codex/skills/x/scripts/x_state.py board
 ```
 
-Interaction modes are `with`, `joint`, and `independent`. Participants come from configurable markdown role cards under `~/.x/projects/<project-key>/roles`, with default templates for `strategy`, `technical`, `product`, `challenger`, and `architect`. The old `discussion-*` commands remain as compatibility aliases, and `product-acceptance` is accepted as a legacy alias for `product`; Acceptance/QA remains a later execution validation layer, not the product role.
+Interaction modes are `with`, `joint`, and `independent`. Participants come from configurable markdown role cards under `~/.x/projects/<project-key>/roles`, with default templates for `strategy`, `technical`, `product`, `challenger`, and `architect`. These interaction role cards are distinct from installed execution agent prompts; `product.toml`, `technical.toml`, `strategy.toml`, `challenger.toml`, and `councilor.toml` are not expected under `~/.codex/agents/`. The old `discussion-*` commands remain as compatibility aliases, and `product-acceptance` is accepted as a legacy alias for `product`; Acceptance/QA remains a later execution validation layer, not the product role.
 
 Role briefs and summaries must include challenger fields: strongest objection, weakest assumption, and evidence that would change the recommendation. Interaction state is advisory until root records a decision; the accepted Architect Intake must link that accepted decision and is then handed to the existing architect room.
 
