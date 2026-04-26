@@ -7,6 +7,18 @@ Updated At: {updated_at}
 
 {responsibilities}
 
+## Use When
+
+{use_when}
+
+## Avoid When
+
+{avoid_when}
+
+## Inputs To Inspect
+
+{inputs_to_inspect}
+
 ## Focus
 
 {focus}
@@ -14,6 +26,22 @@ Updated At: {updated_at}
 ## Must Challenge
 
 {must_challenge}
+
+## Operating Posture
+
+{operating_posture}
+
+## Evidence Standard
+
+{evidence_standard}
+
+## Handoff Value
+
+{handoff_value}
+
+## Failure Modes
+
+{failure_modes}
 
 ## Out Of Bounds
 

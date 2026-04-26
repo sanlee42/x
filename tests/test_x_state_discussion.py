@@ -24,17 +24,27 @@ class XStateDiscussionTests(XStateTestCase):
         self.assertIn("product-acceptance -> product", roles)
 
         product = self.x("role-show", "product").stdout
+        self.assertIn("## Use When", product)
         self.assertIn("user path", product)
+        self.assertIn("unacceptable experience", product)
         self.assertIn("Acceptance/QA", product)
 
         self.x(
             "role-set",
             "ops",
-            "--body",
-            "# x Role Card: ops\n\nRole: ops\n\n## Responsibilities\n\nKeep launch operations bounded.\n",
+            "--responsibilities",
+            "Keep launch operations bounded.",
+            "--use-when",
+            "Launch readiness is unclear.",
+            "--handoff-value",
+            "Surface runbook risks before architect intake.",
         )
         self.assertIn("ops (runtime)", self.x("role-list").stdout)
-        self.assertIn("launch operations", self.x("role-show", "ops").stdout)
+        ops = self.x("role-show", "ops").stdout
+        self.assertIn("launch operations", ops)
+        self.assertIn("## Evidence Standard", ops)
+        self.assertIn("Launch readiness is unclear.", ops)
+        self.assertIn("Surface runbook risks before architect intake.", ops)
 
         self.x("role-set", "technical", "--body", "# x Role Card: technical\n\nRole: technical\n\nModified technical card.\n")
         self.assertIn("technical (runtime override)", self.x("role-list").stdout)

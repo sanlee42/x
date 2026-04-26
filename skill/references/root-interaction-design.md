@@ -53,7 +53,7 @@ python ~/.codex/skills/x/scripts/x_state.py role-show product
 python ~/.codex/skills/x/scripts/x_state.py role-set ops --body-file ops-role.md
 ```
 
-Each role card should cover responsibilities, focus, must-challenge questions, out-of-bounds behavior, and output format. Role outputs must include stance, reasons, objections, weakest assumption, evidence that would change the stance, and questions needing root decision.
+Each role card should cover responsibilities, use/avoid conditions, inputs to inspect, focus, must-challenge questions, operating posture, evidence standard, handoff value, failure modes, out-of-bounds behavior, and output format. Role outputs may use role-specific formats, but must still include stance, reasons, objections, weakest assumption, evidence that would change the stance, and questions needing root decision.
 
 ## Interaction Modes
 

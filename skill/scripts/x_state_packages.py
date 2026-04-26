@@ -482,8 +482,9 @@ def command_councilor_package(root: Path, args: argparse.Namespace) -> None:
     purpose = f"Produce a {council_role} role brief for the linked root interaction."
     expected_return = (
         "Return `Visible Turn` first: a conversational reply from this role addressed to root and/or named participants. "
-        "Then return role-brief fields: stance/recommendation, rationale, objections or rejected options, risks, decisions needed, "
-        "implications for architect, strongest objection, weakest assumption, and evidence that would change the recommendation. "
+        "Then follow the role card's `Output Format`, while still including role-brief fields: stance/recommendation, rationale, "
+        "objections or rejected options, risks, decisions needed, implications for architect, strongest objection, weakest assumption, "
+        "and evidence that would change the recommendation. "
         "Do not create execution tasks, manage lanes, or bypass architect."
     )
     package_id = args.package_id or f"{today()}-councilor-{council_role}-{slug(args.title or discussion.stem, 'package')}"
