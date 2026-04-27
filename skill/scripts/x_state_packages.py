@@ -285,28 +285,62 @@ Notes:
             raise SystemExit("engineer package requires --task-id and --attempt-id")
         purpose = "Implement exactly one x engineering attempt."
         payload = f"""Technical Contract:
-{contract_text}
+- ID: {contract.stem if contract else 'none'}
+- Goal: {compact(section_content(contract_text, 'Goal'), limit=700)}
+- Allowed Boundaries: {compact(section_content(contract_text, 'Allowed Boundaries'), limit=700)}
+- Forbidden Boundaries: {compact(section_content(contract_text, 'Forbidden Boundaries'), limit=700)}
+- Required Verification: {compact(section_content(contract_text, 'Required Verification'), limit=700)}
+- Loopback Conditions: {compact(section_content(contract_text, 'Loopback Conditions'), limit=700)}
 
 Architect Execution Plan:
-{execution_plan_text}
+- ID: {execution_plan.stem if execution_plan else 'none'}
+- Shared Contract Surfaces: {compact(section_content(execution_plan_text, 'Shared Contract Surfaces'), limit=700)}
+- Verification Matrix: {compact(section_content(execution_plan_text, 'Verification Matrix'), limit=700)}
+- Loopback Triggers: {compact(section_content(execution_plan_text, 'Loopback Triggers'), limit=700)}
 
 Lane:
-{lane_text}
+- ID: {lane_display_id(lane) if lane else 'none'}
+- Allowed Scope: {compact(section_content(lane_text, 'Allowed Scope'), limit=700)}
+- Forbidden Scope: {compact(section_content(lane_text, 'Forbidden Scope'), limit=700)}
+- Risk Level: {header_value(lane_text, 'Risk Level') or 'unknown'}
+- Shared Files: {header_value(lane_text, 'Shared Files') or 'none'}
+- Done Evidence: {compact(section_content(lane_text, 'Done Evidence'), limit=700)}
 
 Execution Boundary:
 {execution}
 
 Engineer Task:
-{task_text}
+- ID: {task.stem}
+- Goal: {compact(section_content(task_text, 'Goal'), limit=700)}
+- Requirements: {compact(section_content(task_text, 'Implementation Requirements'), limit=900)}
+- Required Verification: {compact(section_content(task_text, 'Required Verification'), limit=700)}
+- Expected Done Evidence: {compact(section_content(task_text, 'Expected Done Evidence'), limit=700)}
 
 Attempt:
-{attempt_text}
+- ID: {attempt.stem}
+- Kind: {header_value(attempt_text, 'Kind') or 'unknown'}
+- Goal: {compact(section_content(attempt_text, 'Goal'), limit=700)}
+- Source Review: {header_value(attempt_text, 'Source Review') or 'none'}
+- Source Architect Review: {header_value(attempt_text, 'Source Architect Review') or 'none'}
 
-Source Review:
-{review_text}
+Current Lane Diff Stat:
+{diff_stat or 'Not provided.'}
 
-Source Architect Review:
-{source_architect_review_text}
+Source Review Summary:
+- ID: {review.stem if review else 'none'}
+- Recommendation: {header_value(review_text, 'Recommendation') or 'none'}
+- Severity: {header_value(review_text, 'Severity') or 'none'}
+- Bounded Fix: {header_value(review_text, 'Bounded Fix') or 'none'}
+- Escalation Reason: {header_value(review_text, 'Escalation Reason') or 'none'}
+- Summary: {compact(section_content(review_text, 'Summary'), limit=700)}
+- Blocking Findings: {compact(section_content(review_text, 'Blocking Findings'), limit=900)}
+- Reviewed Verification: {compact(section_content(review_text, 'Reviewed Verification'), limit=700)}
+
+Source Architect Review Summary:
+- Recommendation: {header_value(source_architect_review_text, 'Recommendation') or 'none'}
+- Summary: {compact(section_content(source_architect_review_text, 'Summary'), limit=700)}
+- Blocking Findings: {compact(section_content(source_architect_review_text, 'Blocking Findings'), limit=900)}
+- Verification: {compact(section_content(source_architect_review_text, 'Verification'), limit=700)}
 
 Notes:
 {notes}
@@ -818,6 +852,11 @@ def command_package(args: argparse.Namespace) -> None:
             diff_stat = git_output(package_worktree, "diff", "--stat", lane_base, default="Not provided.")
         if not has_content(diff):
             diff = git_output(package_worktree, "diff", lane_base, default="Not provided.")
+    elif args.role == "engineer" and package_worktree is not None and lane is not None:
+        lane_base = lane_integration_base(package_worktree, header_value(lane.read_text(encoding="utf-8"), "Integration Branch") or "HEAD")
+        diff_stat = optional_text_arg(args, "diff_stat", "")
+        if not has_content(diff_stat):
+            diff_stat = git_output(package_worktree, "diff", "--stat", lane_base, default="Not provided.")
     architect_intakes = selected_accepted_intake_paths(root, args.architect_intake_id) if args.role == "architect" else None
     purpose, payload, expected_return = package_payload(
         root,

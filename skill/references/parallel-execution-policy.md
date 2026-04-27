@@ -5,6 +5,7 @@ Default to aggressive safe parallelism. After `architect-gate` passes, main agen
 - Batch-start all dependency-satisfied, unpaused, unblocked, non-conflicting lanes.
 - Do not serialize independent lanes merely because later review or integration gates are serial.
 - Spawn reviewer roles as soon as attempt evidence exists.
+- Reviewer roles run native review in the background; main records the structured result when it returns and continues other orchestration meanwhile.
 - Keep each lane in its own worktree, attempt, package, and heartbeat; never let two engineers share one lane attempt.
 - Use `mailbox-send` for cross-lane coordination events that need architect visibility, especially `artifact-ready`, `interface-change`, `blocker`, `request`, and `response`.
 - Treat architect-declared concurrent lane groups as safe to launch together.

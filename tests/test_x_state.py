@@ -979,6 +979,63 @@ class XStateWorkflowTests(XStateTestCase):
             "--title",
             "Architect-directed fix",
         )
+        (self.lane_worktree("loopback") / "README.md").write_text("# repo\n\nthird wrong marker\n", encoding="utf-8")
+        self.x(
+            "attempt-result",
+            "--attempt-id",
+            "task-llm-a3",
+            "--changed-files",
+            "README.md",
+            "--summary",
+            "Marker is still wrong after architect-directed fix.",
+            "--verification",
+            "Inspected README.",
+            "--residual-risk",
+            "Needs replan.",
+        )
+        self.x(
+            "review",
+            "--run-id",
+            "run-loopback",
+            "--attempt-id",
+            "task-llm-a3",
+            "--review-id",
+            "review-loop-3",
+            "--title",
+            "Loop review 3",
+            "--summary",
+            "Still wrong after three attempts.",
+            "--recommendation",
+            "changes-requested",
+            "--loopback-target",
+            "engineer",
+            "--blocking-findings",
+            "- Marker is still wrong.",
+            "--reviewed-diff",
+            "README diff reviewed.",
+            "--verification",
+            "Verification insufficient.",
+        )
+        third_review = self.review_file("review-loop-3").read_text(encoding="utf-8")
+        self.assertIn("Loopback Target: architect", third_review)
+        run_text = self.run_file("run-loopback").read_text(encoding="utf-8")
+        self.assertIn("Force architect replan before more engineering", run_text)
+        blocked_after_third = self.x(
+            "attempt-start",
+            "--task-id",
+            "task-llm",
+            "--kind",
+            "fix",
+            "--source-review-id",
+            "review-loop-3",
+            "--attempt-id",
+            "task-llm-a4",
+            "--title",
+            "Blocked fourth fix",
+            check=False,
+        )
+        self.assertNotEqual(blocked_after_third.returncode, 0)
+        self.assertIn("force architect replan", blocked_after_third.stderr + blocked_after_third.stdout)
 
     def test_ready_review_clears_architect_loopback_fix_block(self) -> None:
         self.prepare_materialized_run("run-ready-clears", "ready-clears")

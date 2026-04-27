@@ -162,6 +162,7 @@ Role package receivers must not spawn child agents or write final ledger state.
 Main must not act as architect, engineer, or reviewer during normal x execution. Main may do sanity checks for missing fields, contradictions, repo-rule conflicts, and gate failures, but architecture/design judgment, Technical Contract direction, lane risk classification, and architect `merge-ok` decisions belong to the architect role/subagent. Main routes those decisions to architect and records the resulting durable state.
 
 Native reviewer execution must run in a reviewer role/subagent, not inline in main during normal execution. Main records attempt evidence, spawns the reviewer subagent with the native reviewer command/package context, then continues orchestration while the reviewer runs `codex review --uncommitted`.
+Native reviewer execution is background work. Main must not run auto/native review in the main process, and must not sit idle waiting on a reviewer unless the next critical-path action is blocked on that exact review result. The reviewer returns a structured result; main only records the normalized Review and routes loopback state.
 
 Architect integration review should run in an architect role/subagent whenever architect judgment is required. It is not native code review, but it also should not consume main's attention as a deep-review task. Main should spawn architect with the lane/review/verification summary, then write the returned `architect-review` state.
 
@@ -180,5 +181,8 @@ The root control root normally starts on `master/main`. The run's materialized w
 - Interaction synthesis/proposals must write a `Room Essence` inside the existing `Synthesis` section with core judgment, recommended direction, key arguments, objections/conflicts, rejected options, weakest assumptions, evidence to change, open root decisions, and document-use notes. This is the shared advisory source for later BRD, PRD, strategy, sales, or architect-intake writing; it is not a new workflow or execution authority.
 - No materialized execution worktree and gated Architect Execution Plan, no lane work.
 - Reviewer `ready` is code-review evidence only; architect `merge-ok` is required before integration.
+- Engineer/reviewer role packages must be narrow. Do not feed every role full run context by default; package only the linked diff/evidence, contract summary, lane/task scope, verification, and loopback context needed for that role.
+- The first non-ready review may produce a bounded engineer fix only when there is no architecture, contract, abstraction, shared-surface, or cross-lane signal. The second non-ready review for the same task requires architect loopback. The third non-ready review for the same task forces architect replan; do not keep patching the lane.
+- If a review or fix approach exposes a wrong abstraction, public surface gap, repeated conditional patching, or shared-interface uncertainty, involve architect before the next engineer fix attempt, even if it is the first non-ready review.
 - Architect directives are the control surface for pause, resume, replan, continue, parallelism/verification adjustments, requests for evidence, and root decisions.
 - Merge-back recommendation is not a merge. Do not merge to `master/main`, push, open PR, or call GitHub unless root explicitly asks.

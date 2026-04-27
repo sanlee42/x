@@ -117,7 +117,9 @@ python ~/.codex/skills/x/scripts/x_state.py cleanup-worktrees --run-id <run-id> 
 - `status` reports the current project and run state.
 - `audit` produces a read-only run report unless `--write` is passed.
 - `cleanup-worktrees` removes only clean, integrated, registered lane worktrees when `--apply` is passed.
-- Reviewer handoff defaults to native inside a reviewer subagent: main should spawn a reviewer role/subagent and have that reviewer run `package --role reviewer`, which runs `codex review --uncommitted` from the lane worktree with no custom prompt, stores the raw output, and records a normalized x Review. Main should not run the native reviewer inline except for explicit local/debug use. Use `--reviewer-backend package` only for a supplemental context-rich package.
+- Reviewer handoff defaults to native inside a reviewer subagent: main should spawn a reviewer role/subagent and have that reviewer run `package --role reviewer`, which runs `codex review --uncommitted` from the lane worktree with no custom prompt, stores the raw output, and records a normalized x Review. Main should not run the native reviewer inline or idle on it except when the next critical-path action is blocked on that result. Use `--reviewer-backend package` only for a supplemental context-rich package.
+- Engineer/reviewer packages are deliberately narrow: linked contract summary, lane/task scope, diff/evidence, verification, and loopback context. Avoid feeding every role full run history.
+- Fix loops are capped: first non-ready may be a bounded engineer fix, second non-ready requires architect loopback, third non-ready forces architect replan.
 
 Most other `x_state.py` commands are workflow internals used by the `$x` skill to record interactions, briefs, plans, packages, reviews, directives, decisions, risks, gates, and close records.
 

@@ -27,6 +27,7 @@ Lane Branch: {lane_branch}
 - Stay inside the package role and linked state records.
 - Do not mutate final ledger state from a role package.
 - Engineer and reviewer roles must work only in the Lane Worktree. If it is not available or the cwd does not match, stop and report the blocker.
+- Treat this package as intentionally narrow. Do not ask main for full run history unless the linked contract, diff/evidence, lane/task scope, verification, and loopback context are insufficient to complete this exact role task.
 - Return exactly the evidence requested below.
 
 ## Project Context Files

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 from pathlib import Path
 
 from x_state_common import *
@@ -572,54 +571,9 @@ def maybe_auto_native_review(
     blockers: str | None,
     dry_run: bool,
 ) -> None:
-    if dry_run or not auto_native_review_enabled():
-        return
-    if lane is None:
-        return
-    if status != "done" or blocking_present(blockers):
-        return
-    if ready_or_open_review_for_attempt(root, attempt.stem):
-        return
-    from x_state_packages import command_package
-
-    command_package(
-        argparse.Namespace(
-            role="reviewer",
-            reviewer_backend="codex-native",
-            run_id=run.stem,
-            interaction_id=None,
-            council_role=None,
-            architect_intake_id=None,
-            task_id=task.stem,
-            attempt_id=attempt.stem,
-            review_id=None,
-            title=None,
-            package_id=None,
-            diff_stat=None,
-            diff_stat_file=None,
-            diff=None,
-            diff_file=None,
-            verification=None,
-            verification_file=None,
-            notes="Auto-triggered after attempt-result.",
-            notes_file=None,
-            next_action=None,
-            dry_run=False,
-        )
-    )
-
-
-def auto_native_review_enabled() -> bool:
-    value = os.environ.get("X_AUTO_NATIVE_REVIEW", "0").strip().lower()
-    return value not in {"0", "false", "no", "off"}
-
-
-def ready_or_open_review_for_attempt(root: Path, attempt_id: str) -> bool:
-    for review in files_for_header(root, "reviews", "Linked Attempt", attempt_id):
-        text = review.read_text(encoding="utf-8")
-        if header_value(text, "Status") not in {"superseded"}:
-            return True
-    return False
+    # Native review is reviewer-subagent work. Keep this hook inert so
+    # attempt-result never blocks main by running `codex review` inline.
+    return
 
 
 def merge_ready_failures(root: Path, run: Path) -> list[str]:

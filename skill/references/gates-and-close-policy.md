@@ -75,6 +75,7 @@ Cleanup v1 only removes lane worktrees whose lane state is `Integrated: yes`, la
 - Open architect `root-decision` directives block accepted close until root records or clears the decision.
 - Blocking or unresolved review means no accepted close.
 - Any planned lane without a latest ready reviewed attempt, architect `merge-ok`, integration, green final verification status, and recorded final verification evidence fails the merge-ready gate.
-- Three non-ready reviews for the same task require architect/root loopback.
+- The second non-ready review for the same task requires architect/root loopback.
+- The third non-ready review for the same task forces architect replan; continuing engineer fix attempts under the same contract/plan is not allowed.
 - Missing required verification means no merge-ready gate.
 - Merge-back recommendation is not a merge. Root must explicitly authorize merge, push, PR, or GitHub integration.

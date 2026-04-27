@@ -18,6 +18,11 @@ def engineer_fix_loopback_failures(root: Path, run_id: str, task_id: str, lane: 
     loopback_target = header_value(latest_text, "Loopback Target")
     if loopback_target not in {"architect", "root"}:
         return []
+    if non_ready_review_count(root, task_id) >= FORCE_REPLAN_NON_READY_REVIEWS:
+        return [
+            f"task {task_id} has {FORCE_REPLAN_NON_READY_REVIEWS} or more non-ready reviews; "
+            "force architect replan before starting another engineer fix attempt"
+        ]
     if architect_loopback_response_exists(root, run_id, latest_review, lane):
         return []
     return [

@@ -69,6 +69,8 @@ Forbidden:
 
 ## Loopback Triggers
 
+Must include: second non-ready review -> architect loopback; third non-ready review -> architect replan; first non-ready review with abstraction/public-surface/shared-interface signals -> architect observation before another fix.
+
 {loopback_triggers}
 
 ## Blocked-State Recovery

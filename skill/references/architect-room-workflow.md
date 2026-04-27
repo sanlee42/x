@@ -89,7 +89,7 @@ Interaction participant views must not create Engineer Tasks, start attempts, ma
     ```bash
     python ~/.codex/skills/x/scripts/x_state.py package --role engineer --task-id "<task-id>" --attempt-id "<attempt-id>"
     ```
-    The engineer must work only inside the package's `Lane Worktree`.
+    The engineer must work only inside the package's `Lane Worktree`. Engineer packages are intentionally narrow: contract summary, lane/task scope, current diff stat when present, source review summaries, and verification. Do not expand an engineer package to full run state unless architect explicitly asks for that context.
 13. After implementation, record attempt evidence:
     ```bash
     python ~/.codex/skills/x/scripts/x_state.py attempt-result --attempt-id "<attempt-id>" --changed-files "<files>" --summary "<summary>" --verification "<observed results>" --residual-risk "<risk>"
@@ -98,7 +98,7 @@ Interaction participant views must not create Engineer Tasks, start attempts, ma
     ```bash
     python ~/.codex/skills/x/scripts/x_state.py package --role reviewer --task-id "<task-id>" --attempt-id "<attempt-id>"
     ```
-    Main must hand this command to a reviewer role/subagent and keep orchestrating other work; do not run native review inline in main during normal execution. The default reviewer backend is native and runs `codex review --uncommitted` from the lane worktree without a custom prompt, stdin prompt, or `--base ... -`. x stores the native raw output first, then normalizes it into a Review with severity, bounded-fix, and escalation fields. Use `--reviewer-backend package` only for a context-rich supplemental reviewer package.
+    Main must hand this command to a reviewer role/subagent and keep orchestrating other work; do not run native review inline in main during normal execution. Native review is background reviewer work, not a blocking main task. The default reviewer backend is native and runs `codex review --uncommitted` from the lane worktree without a custom prompt, stdin prompt, or `--base ... -`. x stores the native raw output first, then normalizes it into a Review with severity, bounded-fix, and escalation fields. Use `--reviewer-backend package` only for a context-rich supplemental reviewer package.
 15. Record code review:
     ```bash
     python ~/.codex/skills/x/scripts/x_state.py review --title "<review>" --attempt-id "<attempt-id>" --summary "<summary>" --recommendation ready --reviewed-diff "<diff evidence>" --verification "<assessment>"
@@ -107,7 +107,7 @@ Interaction participant views must not create Engineer Tasks, start attempts, ma
     ```bash
     python ~/.codex/skills/x/scripts/x_state.py attempt-start --task-id "<task-id>" --lane-id "<lane-id>" --kind fix --source-review-id "<review-id>" --title "<fix title>"
     ```
-17. Continue engineer package -> attempt-result -> native reviewer normalization until the lane has a ready code review. x may auto-start a fix attempt only when the normalized review is `changes-requested`, severity is `p3` or `none`, bounded fix is `yes`, escalation reason is `none`, and the review covers the latest attempt. The first non-ready review can loop to engineer; the second non-ready review defaults to architect loopback. If the latest unresolved review loops to architect/root, do not start another engineer fix attempt until an architect directive or architect review provides the next execution instruction.
+17. Continue engineer package -> attempt-result -> native reviewer normalization until the lane has a ready code review. x may auto-start a fix attempt only when the normalized review is `changes-requested`, severity is `p3` or `none`, bounded fix is `yes`, escalation reason is `none`, and the review covers the latest attempt. The first non-ready review can loop to engineer only when it is a narrow implementation miss with no abstraction, contract, shared-surface, or cross-lane signal. The second non-ready review defaults to architect loopback. The third non-ready review for the same task forces architect replan; do not start a fourth patch attempt under the same contract/plan. If the latest unresolved review loops to architect/root, do not start another engineer fix attempt until an architect directive or architect review provides the next execution instruction.
 18. Architect performs strong integration review. Reviewer `ready` alone is not integration permission:
     ```bash
     python ~/.codex/skills/x/scripts/x_state.py architect-review --lane-id "<lane-id>" --attempt-id "<attempt-id>" --title "<architect review>" --summary "<summary>" --recommendation merge-ok --criteria "<criteria>" --verification "<assessment>" --integration-risk "<risk>"

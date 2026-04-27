@@ -79,9 +79,15 @@ def command_review(args: argparse.Namespace) -> None:
         residual_risk=args.residual_risk or "Not specified.",
     )
     write(review_path, content, args.dry_run)
+    force_replan = review_force_replan_required(args, next_non_ready_count)
     next_action = apply_review_result(root, args, review_path, task, attempt, loopback_target)
+    if force_replan:
+        next_action = (
+            f"Force architect replan before more engineering; {task.stem} has "
+            f"{next_non_ready_count} non-ready reviews."
+        )
     needs_user = review_needs_user(args, next_non_ready_count, loopback_target)
-    if args.recommendation != "ready" and needs_user == "yes":
+    if args.recommendation != "ready" and needs_user == "yes" and not force_replan:
         next_action = f"Loop back to architect/root for {task.stem}: repeated non-ready reviews or root loopback."
     run_text = update_header(run, phase="Review", needs_user=needs_user)
     review_line = f"{review_path.stem}: {attempt.stem} {args.recommendation} - {args.summary}"
@@ -403,7 +409,7 @@ def next_fix_attempt_id(root: Path, task_id: str) -> str:
 def review_loopback(args: argparse.Namespace, next_non_ready_count: int) -> str:
     if args.recommendation == "ready":
         return "none"
-    if next_non_ready_count >= MAX_NON_READY_REVIEWS:
+    if next_non_ready_count >= ARCHITECT_LOOPBACK_NON_READY_REVIEWS:
         if args.loopback_target in {"architect", "root"}:
             return args.loopback_target
         return "architect"
@@ -414,6 +420,10 @@ def review_loopback(args: argparse.Namespace, next_non_ready_count: int) -> str:
     if args.recommendation == "blocked":
         return "architect"
     return "none"
+
+
+def review_force_replan_required(args: argparse.Namespace, next_non_ready_count: int) -> bool:
+    return args.recommendation != "ready" and next_non_ready_count >= FORCE_REPLAN_NON_READY_REVIEWS
 
 
 def apply_review_result(
@@ -442,6 +452,6 @@ def apply_review_result(
 def review_needs_user(args: argparse.Namespace, next_non_ready_count: int, loopback_target: str) -> str | None:
     if args.recommendation == "ready":
         return args.needs_user or "no"
-    if next_non_ready_count >= MAX_NON_READY_REVIEWS or loopback_target == "root":
+    if next_non_ready_count >= ARCHITECT_LOOPBACK_NON_READY_REVIEWS or loopback_target == "root":
         return "yes"
     return args.needs_user
