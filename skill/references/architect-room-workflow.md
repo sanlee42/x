@@ -112,7 +112,7 @@ Interaction participant views must not create Engineer Tasks, start attempts, ma
     ```bash
     python ~/.codex/skills/x/scripts/x_state.py architect-review --lane-id "<lane-id>" --attempt-id "<attempt-id>" --title "<architect review>" --summary "<summary>" --recommendation merge-ok --criteria "<criteria>" --verification "<assessment>" --integration-risk "<risk>"
     ```
-    Read `references/architect-review-policy.md` before architect review. Main should spawn an architect role/subagent for this judgment and record the returned `architect-review`; main should not personally perform the deep architecture review or issue `merge-ok`. Standard sampled lanes and high-risk lanes require one `merge-ok`; critical lanes require two distinct `merge-ok` architect review records linked to the latest attempt before integration.
+    Read `references/architect-review-policy.md` before architect review. Main should spawn an architect role/subagent for this judgment and record the returned `architect-review`; main should not personally perform the deep architecture review or issue `merge-ok`. Architect review is background work by default: after spawning architect, main should continue safe independent orchestration instead of immediately waiting, unless this `merge-ok`/directive is the current critical-path blocker and no other safe work remains. Standard sampled lanes and high-risk lanes require one `merge-ok`; critical lanes require two distinct `merge-ok` architect review records linked to the latest attempt before integration.
 19. If architect needs to adjust execution before integration review, record an explicit directive:
    ```bash
    python ~/.codex/skills/x/scripts/x_state.py architect-directive --run-id "<run-id>" --title "<directive>" --target lane --lane-id "<lane-id>" --action pause-lane --summary "<why>" --instructions "<what main should do>" --acceptance "<clear condition>"
@@ -135,6 +135,8 @@ Interaction participant views must not create Engineer Tasks, start attempts, ma
 ## Role Thread Lifecycle
 
 When main receives a completed `architect`, `engineer`, or `reviewer` subagent result, main first records the durable state that result implies, such as `brief`, `execution-plan`, `attempt-result`, `review`, `architect-review`, `architect-directive`, `lane-update`, `mailbox-send`, `risk`, or `checkpoint`. After the state write succeeds, main must close the completed agent thread so stale role context does not remain active.
+
+Main should not use `wait_agent` as the default follow-up to spawning architect/reviewer. Waiting is allowed only at a join point: the next action is blocked on that exact result, no safe independent lane/review/package/state work remains, and the blocker is recorded in lane heartbeat, run next action, or checkpoint state when the wait may be long.
 
 If closing a completed thread fails, main records the risk in a checkpoint, heartbeat, or risk record and continues from the durable state already written. A close failure must not block a completed attempt result, review, architect directive, or accepted state transition.
 

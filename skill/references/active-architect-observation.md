@@ -16,6 +16,8 @@ During execution, architect should act as an active control-plane observer, not 
 
 Architect observation output may recommend `continue`, `parallelism-adjustment`, `verification-adjustment`, `pause-lane`, `resume-lane`, `replan`, `root-decision`, or `request-more-evidence`.
 
+Architect observation runs in the background by default. Main should spawn the architect observation package, then continue safe independent work such as other lane attempts, reviewer handoffs, package creation, heartbeats, mailbox cleanup, or checkpointing. Main should wait for architect only when no safe lower-lane work can proceed without the observation result.
+
 Three non-ready reviews for the same task are not an execution loop; they are evidence that the contract, lane boundary, or abstraction is wrong. Architect observation must return a `replan` directive or an explicit root-decision request before any further engineering work.
 
 If execution should change, main records it as an `architect-directive` with concrete instructions and acceptance criteria. `parallelism-adjustment`, `verification-adjustment`, and `request-more-evidence` mean main should record and act on the observation without gating lower lane work or merge-ready by default. Use `pause-lane`, `replan`, or `root-decision` when the observation must block lane work, force a new gated plan, or require root input before accepted close. Architect still does not manage engineer/reviewer sessions directly.

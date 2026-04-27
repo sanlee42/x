@@ -2,7 +2,7 @@
 
 Reviewer `ready` is not integration approval. Architect review must evaluate the lane harder than code review and must not return `merge-ok` without evidence across all relevant dimensions.
 
-Architect review is architect-role work. Main should spawn an architect subagent with the lane, code review, verification, risk, and integration context, then record the architect's returned review. Main may reject incomplete or contradictory output, but must not substitute its own deep architecture judgment for the architect role.
+Architect review is architect-role work. Main should spawn an architect subagent with the lane, code review, verification, risk, and integration context, then record the architect's returned review. Architect review runs in the background by default; main should continue safe independent orchestration and only wait at a true join point where the architect result is the current critical-path blocker. Main may reject incomplete or contradictory output, but must not substitute its own deep architecture judgment for the architect role.
 
 ## Review Dimensions
 
