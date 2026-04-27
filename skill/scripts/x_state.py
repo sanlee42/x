@@ -387,7 +387,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     package = sub.add_parser("package", help="create an input package")
     package.add_argument("--role", required=True, choices=["architect", "engineer", "reviewer", "councilor"])
-    package.add_argument("--reviewer-backend", default="package", choices=["package", "codex-native"])
+    package.add_argument("--reviewer-backend", choices=["codex-native", "package"])
     package.add_argument("--run-id")
     package.add_argument("--interaction-id", dest="interaction_id")
     package.add_argument("--participant", dest="council_role", metavar="PARTICIPANT")
@@ -413,6 +413,21 @@ def build_parser() -> argparse.ArgumentParser:
     review.add_argument("--title", required=True)
     review.add_argument("--summary", required=True)
     review.add_argument("--recommendation", required=True, choices=["ready", "changes-requested", "blocked"])
+    review.add_argument("--severity", choices=["p0", "p1", "p2", "p3", "none"])
+    review.add_argument("--bounded-fix", choices=["yes", "no"])
+    review.add_argument(
+        "--escalation-reason",
+        choices=[
+            "none",
+            "scope-drift",
+            "wrong-abstraction",
+            "contract-incomplete",
+            "cross-lane-conflict",
+            "acceptance-change",
+            "unstructured-native-output",
+            "other",
+        ],
+    )
     review.add_argument("--reviewed-diff", required=True)
     review.add_argument("--verification", required=True)
     review.add_argument("--blocking-findings")

@@ -222,7 +222,7 @@ class XStateCleanupWorktreeTests(XStateTestCase):
             "--residual-risk",
             "None.",
         )
-        self.x("package", "--role", "reviewer", "--run-id", run_id, "--task-id", "task-llm", "--attempt-id", "task-llm-a1")
+        self.x("package", "--role", "reviewer", "--reviewer-backend", "package", "--run-id", run_id, "--task-id", "task-llm", "--attempt-id", "task-llm-a1")
         self.x(
             "review",
             "--run-id",

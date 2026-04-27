@@ -2,6 +2,8 @@
 
 Reviewer `ready` is not integration approval. Architect review must evaluate the lane harder than code review and must not return `merge-ok` without evidence across all relevant dimensions.
 
+Architect review is architect-role work. Main should spawn an architect subagent with the lane, code review, verification, risk, and integration context, then record the architect's returned review. Main may reject incomplete or contradictory output, but must not substitute its own deep architecture judgment for the architect role.
+
 ## Review Dimensions
 
 - architecture fit: respects the accepted brief, technical contract, execution plan, boundaries, ownership, dependency direction, and integration order
@@ -22,6 +24,6 @@ Reviewer `ready` is not integration approval. Architect review must evaluate the
 - `blocked`: evidence is missing or dependency is unresolved
 - `replan`: implementation reveals that the execution plan or contract is wrong
 
-High-risk lanes are declared by `Risk Level` `high` in the gated execution plan. High risk includes shared infrastructure, cross-lane contracts, data migrations, auth/security/privacy, public APIs, performance-sensitive paths, or files modified by more than one lane.
+Lane risk is declared by `Risk Level` `standard`, `high`, or `critical` in the gated execution plan. Critical risk is mandatory for public output/schema, shared interfaces/helpers, cross-lane contracts, data migrations, auth/security/privacy, public APIs, performance-sensitive paths, shared files, or files/modules modified by more than one lane.
 
-High-risk integration requires two distinct architect review records with `Recommendation: merge-ok`, and both records must link the latest lane attempt. Older merge-ok reviews do not count after a fix attempt starts. Standard lanes require one latest-attempt `merge-ok` architect review.
+Standard lanes enter the integration-ready queue after a ready native code review. Standard lanes selected for sampling require one latest-attempt `merge-ok`; unsampled standard lanes do not. High-risk lanes require one latest-attempt `merge-ok`. Critical lanes require two distinct architect review records with `Recommendation: merge-ok`, and both records must link the latest lane attempt. Older merge-ok reviews do not count after a fix attempt starts.

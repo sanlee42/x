@@ -15,7 +15,7 @@ Integration Branch: {integration_branch}
 
 ## Parallel Lanes
 
-Required table columns: Lane ID, Task ID, Allowed Scope, Forbidden Scope, Worktree Scope, Verification, Done Evidence, Risk Level, Concurrent Group, Serial Only, Shared Files. Risk Level is `standard` or `high`; Concurrent Group is a group name or `none`; Serial Only is `yes` or `no`; Shared Files is a file/module list or `none`.
+Required table columns: Lane ID, Task ID, Allowed Scope, Forbidden Scope, Worktree Scope, Verification, Done Evidence, Risk Level, Concurrent Group, Serial Only, Shared Files. Risk Level is `standard`, `high`, or `critical`; Concurrent Group is a group name or `none`; Serial Only is `yes` or `no`; Shared Files is a file/module list or `none`. Shared files and public output/schema, shared interfaces, auth/security/privacy, data migrations, performance-sensitive paths, public APIs, or multi-lane file/module ownership require `critical`.
 
 {parallel_lanes}
 

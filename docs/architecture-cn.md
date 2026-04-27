@@ -79,7 +79,7 @@ interaction
 
 - Architect Execution Plan 必须通过 readiness gate 后才能开始 lane。
 - Plan 必须说明 lane scope、依赖、risk level、concurrent group、serial-only、shared files 和 integration order。
-- high-risk lane 需要两个不同的 `merge-ok` architect review，且都必须链接最新 attempt。
+- sampled standard lane 和 high-risk lane 需要 1 个 `merge-ok` architect review；critical lane 需要两个不同的 `merge-ok` architect review，且都必须链接最新 attempt。
 - `integrate` 只集成 architect-approved lane diff 到 integration worktree。
 - `close --status accepted` 前必须通过 merge-ready gate。
 - merge-back recommendation 不是 merge；merge、push、PR 必须由 root 显式授权。
@@ -120,7 +120,7 @@ Verification, Done Evidence, Risk Level, Concurrent Group,
 Serial Only, Shared Files
 ```
 
-`Risk Level` 是 `standard` 或 `high`。包含 shared files 的 lane 必须是 `high`。serial-only lane 的 concurrent group 必须是 `none`。
+`Risk Level` 是 `standard`、`high` 或 `critical`。包含 shared files、public output/schema、shared interface、auth/security/privacy、migration、performance-sensitive path、public API 或多 lane 共同修改同一文件/模块的 lane 必须是 `critical`。serial-only lane 的 concurrent group 必须是 `none`。
 
 architect directive 是执行期控制面，支持：
 

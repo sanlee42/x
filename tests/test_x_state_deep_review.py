@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import unittest
 
-from tests.x_state_test_base import XStateTestCase
+from tests.x_state_test_base import ROOT, XStateTestCase
 
 
 class XStateDeepReviewTests(XStateTestCase):
@@ -36,7 +36,7 @@ class XStateDeepReviewTests(XStateTestCase):
             "--residual-risk",
             "None.",
         )
-        self.x("package", "--role", "reviewer", "--run-id", run_id, "--task-id", "task-llm", "--attempt-id", "task-llm-a1", "--package-id", f"reviewer-{run_id}")
+        self.x("package", "--role", "reviewer", "--reviewer-backend", "package", "--run-id", run_id, "--task-id", "task-llm", "--attempt-id", "task-llm-a1", "--package-id", f"reviewer-{run_id}")
         self.x(
             "review",
             "--run-id",
@@ -174,7 +174,8 @@ print(os.environ.get("FAKE_CODEX_OUTPUT", ""))
         self.prepare_materialized_run("run-commit", "commit")
         self.record_ready_readme_attempt("run-commit", "commit", "committed marker", commit=True)
         reviewer_package = self.package_file("reviewer-run-commit").read_text(encoding="utf-8")
-        self.assertIn("committed marker", reviewer_package)
+        self.assertIn("Diff Reference", reviewer_package)
+        self.assertIn("This supplemental package intentionally does not inline the full diff", reviewer_package)
         self.approve_integrate_and_mark_green("run-commit", "task-llm-a1", review_id="architect-commit")
         integrated_readme = (self.repo / ".dev/commit/README.md").read_text(encoding="utf-8")
         self.assertIn("committed marker", integrated_readme)
@@ -203,7 +204,7 @@ print(os.environ.get("FAKE_CODEX_OUTPUT", ""))
         self.x("attempt-start", "--task-id", "task-llm", "--kind", "implementation", "--title", "Add file")
         (self.lane_worktree("untracked") / "new-file.txt").write_text("new\n", encoding="utf-8")
         self.x("attempt-result", "--attempt-id", "task-llm-a1", "--changed-files", "new-file.txt", "--summary", "Added new file.", "--verification", "Inspected file.", "--residual-risk", "None.")
-        failed = self.x("package", "--role", "reviewer", "--run-id", "run-untracked", "--task-id", "task-llm", "--attempt-id", "task-llm-a1", check=False)
+        failed = self.x("package", "--role", "reviewer", "--reviewer-backend", "package", "--run-id", "run-untracked", "--task-id", "task-llm", "--attempt-id", "task-llm-a1", check=False)
         self.assertNotEqual(failed.returncode, 0)
         self.assertIn("reviewer package cannot capture untracked lane files: new-file.txt", failed.stderr + failed.stdout)
 
@@ -213,14 +214,11 @@ print(os.environ.get("FAKE_CODEX_OUTPUT", ""))
         )
         self.record_attempt_for_native_review("run-native-ready", "native-ready", "NATIVE_DIFF_SENTINEL")
         lane_tree = self.lane_worktree("native-ready")
-        lane_base = self.git("merge-base", "HEAD", "feat/native-ready", cwd=lane_tree).stdout.strip()
 
         self.x(
             "package",
             "--role",
             "reviewer",
-            "--reviewer-backend",
-            "codex-native",
             "--run-id",
             "run-native-ready",
             "--task-id",
@@ -230,23 +228,24 @@ print(os.environ.get("FAKE_CODEX_OUTPUT", ""))
         )
 
         argv = (log_dir / "argv.txt").read_text(encoding="utf-8").splitlines()
-        self.assertEqual(argv[1:], ["review", "--base", lane_base, "-"])
+        self.assertEqual(argv[1:], ["review", "--uncommitted"])
         self.assertEqual((log_dir / "cwd.txt").read_text(encoding="utf-8"), str(lane_tree))
         stdin = (log_dir / "stdin.txt").read_text(encoding="utf-8")
-        self.assertIn("Technical Contract Summary:", stdin)
-        self.assertIn("Engineer Task:", stdin)
-        self.assertIn("Attempt Result:", stdin)
-        self.assertIn("Expected x Review Return Format:", stdin)
+        self.assertEqual("", stdin)
         self.assertNotIn("NATIVE_DIFF_SENTINEL", stdin)
 
         reviews = sorted((self.x_home / "projects/repo/reviews").glob("*.md"))
         self.assertEqual(len(reviews), 1)
         review_text = reviews[0].read_text(encoding="utf-8")
         self.assertIn("Recommendation: ready", review_text)
+        self.assertIn("Severity: none", review_text)
+        self.assertIn("Bounded Fix: no", review_text)
+        self.assertIn("Escalation Reason: none", review_text)
         self.assertIn("Linked Run: run-native-ready", review_text)
         self.assertIn("Linked Attempt: task-llm-a1", review_text)
         self.assertIn("recommendation: ready", review_text)
-        self.assertIn("codex review --base", review_text)
+        self.assertIn("codex review --uncommitted", review_text)
+        self.assertIn("x context was retained in state", review_text)
 
     def test_codex_native_reviewer_defaults_to_blocked_without_explicit_recommendation(self) -> None:
         self.install_fake_codex("Looks okay, but this output does not have the required structured recommendation line.")
@@ -270,19 +269,22 @@ print(os.environ.get("FAKE_CODEX_OUTPUT", ""))
         self.assertEqual(len(reviews), 1)
         review_text = reviews[0].read_text(encoding="utf-8")
         self.assertIn("Recommendation: blocked", review_text)
-        self.assertIn("No explicit `recommendation: ...` line was found.", review_text)
+        self.assertIn("Severity: none", review_text)
+        self.assertIn("Bounded Fix: no", review_text)
+        self.assertIn("Escalation Reason: unstructured-native-output", review_text)
+        self.assertIn("not structured enough", review_text)
         self.assertIn("Looks okay", review_text)
         run_text = self.run_file("run-native-blocked").read_text(encoding="utf-8")
-        self.assertIn("Interpret and normalize native Codex review output before proceeding", run_text)
+        self.assertIn("Proceed according to the normalized x Review gate", run_text)
 
-    def test_codex_native_reviewer_rejects_untracked_files_before_invoking_codex(self) -> None:
+    def test_codex_native_reviewer_invokes_codex_with_untracked_files(self) -> None:
         log_dir = self.install_fake_codex("recommendation: ready")
         self.prepare_materialized_run("run-native-untracked", "native-untracked")
         self.x("attempt-start", "--task-id", "task-llm", "--kind", "implementation", "--title", "Add file")
         (self.lane_worktree("native-untracked") / "new-file.txt").write_text("new\n", encoding="utf-8")
         self.x("attempt-result", "--attempt-id", "task-llm-a1", "--changed-files", "new-file.txt", "--summary", "Added new file.", "--verification", "Inspected file.", "--residual-risk", "None.")
 
-        failed = self.x(
+        self.x(
             "package",
             "--role",
             "reviewer",
@@ -294,12 +296,96 @@ print(os.environ.get("FAKE_CODEX_OUTPUT", ""))
             "task-llm",
             "--attempt-id",
             "task-llm-a1",
-            check=False,
         )
 
-        self.assertNotEqual(failed.returncode, 0)
-        self.assertIn("reviewer package cannot capture untracked lane files: new-file.txt", failed.stderr + failed.stdout)
-        self.assertFalse((log_dir / "argv.txt").exists())
+        argv = (log_dir / "argv.txt").read_text(encoding="utf-8").splitlines()
+        self.assertEqual(argv[1:], ["review", "--uncommitted"])
+        review_text = next((self.x_home / "projects/repo/reviews").glob("*.md")).read_text(encoding="utf-8")
+        self.assertIn("Recommendation: ready", review_text)
+
+    def test_native_p2_blocks_without_auto_fix(self) -> None:
+        self.install_fake_codex("[P2] README marker is wrong.")
+        self.record_attempt_for_native_review("run-native-p2", "native-p2", "wrong marker")
+
+        self.x(
+            "package",
+            "--role",
+            "reviewer",
+            "--run-id",
+            "run-native-p2",
+            "--task-id",
+            "task-llm",
+            "--attempt-id",
+            "task-llm-a1",
+        )
+
+        review_text = next((self.x_home / "projects/repo/reviews").glob("*.md")).read_text(encoding="utf-8")
+        self.assertIn("Recommendation: changes-requested", review_text)
+        self.assertIn("Severity: p2", review_text)
+        self.assertIn("Bounded Fix: no", review_text)
+        self.assertFalse(self.attempt_file("task-llm-a2").exists())
+
+    def test_native_bounded_p3_starts_fix_attempt(self) -> None:
+        self.install_fake_codex(
+            "recommendation: changes-requested\n"
+            "severity: p3\n"
+            "bounded fix: yes\n"
+            "escalation reason: none\n\n"
+            "blocking findings:\n- README marker typo is narrowly fixable."
+        )
+        self.record_attempt_for_native_review("run-native-bounded", "native-bounded", "typo marker")
+
+        self.x(
+            "package",
+            "--role",
+            "reviewer",
+            "--run-id",
+            "run-native-bounded",
+            "--task-id",
+            "task-llm",
+            "--attempt-id",
+            "task-llm-a1",
+        )
+
+        review_text = next((self.x_home / "projects/repo/reviews").glob("*.md")).read_text(encoding="utf-8")
+        self.assertIn("Recommendation: changes-requested", review_text)
+        self.assertIn("Severity: p3", review_text)
+        self.assertIn("Bounded Fix: yes", review_text)
+        fix_text = self.attempt_file("task-llm-a2").read_text(encoding="utf-8")
+        self.assertIn("Kind: fix", fix_text)
+        self.assertIn("Source Review:", fix_text)
+
+    def test_review_severity_order_and_auto_fix_cutoff(self) -> None:
+        import sys
+
+        sys.path.insert(0, str(ROOT / "skill/scripts"))
+        from x_state_reviews import (
+            highest_review_severity,
+            normalize_native_review_output,
+            review_severity_allows_auto_fix,
+        )
+
+        self.assertEqual(highest_review_severity(["none", "p3", "p2", "p1", "p0"]), "p0")
+        self.assertTrue(review_severity_allows_auto_fix("p3"))
+        self.assertTrue(review_severity_allows_auto_fix("none"))
+        self.assertFalse(review_severity_allows_auto_fix("p2"))
+        normalized = normalize_native_review_output("blocking findings:\n- Something is wrong.")
+        self.assertEqual(normalized["recommendation"], "blocked")
+        self.assertEqual(normalized["escalation_reason"], "unstructured-native-output")
+
+    def test_attempt_result_does_not_run_native_reviewer_inline_by_default(self) -> None:
+        self.record_attempt_for_native_review("run-native-not-inline", "native-not-inline", "marker")
+
+        self.assertEqual(list((self.x_home / "projects/repo/reviews").glob("*.md")), [])
+        self.assertEqual(list((self.x_home / "projects/repo/packages").glob("*.md")), [])
+        run_text = self.run_file("run-native-not-inline").read_text(encoding="utf-8")
+        self.assertIn("Spawn a reviewer subagent to run native reviewer", run_text)
+
+    def test_skill_documents_main_role_boundaries(self) -> None:
+        skill_text = (ROOT / "skill/SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("Main must not act as architect, engineer, or reviewer", skill_text)
+        self.assertIn("architecture/design judgment", skill_text)
+        self.assertIn("Architect integration review should run in an architect role/subagent", skill_text)
 
 
 if __name__ == "__main__":

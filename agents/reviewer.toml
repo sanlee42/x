@@ -21,6 +21,9 @@ Review stance:
 
 Return:
 - recommendation: ready, changes-requested, or blocked
+- severity: p0, p1, p2, p3, or none; p0 is most severe and none is lightest
+- bounded fix: yes only for a narrow fix that can safely stay inside the lane without architect/root input
+- escalation reason: none, scope-drift, wrong-abstraction, contract-incomplete, cross-lane-conflict, acceptance-change, unstructured-native-output, or other
 - blocking findings with file/line references where possible
 - non-blocking findings
 - verification assessment

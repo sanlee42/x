@@ -82,6 +82,27 @@ python ~/.codex/skills/x/scripts/x_state.py package --role councilor --interacti
 
 Independent synthesis requires a `ready` participant brief for every participant. Unresolved conflicts must be surfaced to root instead of being silently resolved by architect.
 
+## Council Response Protocol
+
+The council is useful only when it behaves like a real working room. The default response must be a structured deep discussion, not a compressed set of named blurbs.
+
+First substantive response on a council topic:
+
+- State the decision frame: what root is deciding, what is out of scope, and what evidence could change the answer.
+- Round 1: each active participant gives a concrete position with reasons, evidence or assumptions, risk, and decision implication.
+- Round 2: participants challenge named claims from other participants. `challenger` must attack the strongest live claim, and at least one domain participant must answer or narrow their stance.
+- Options: list realistic paths root could choose, including a pause/validation path when evidence is weak.
+- Evidence needed: list specific customer interviews, data checks, competitor proof, technical spikes, or sales tests that would change the recommendation.
+- Main only facilitates. Main must not convert the room into `Room Essence`, root decision, or architect intake until root asks for that step.
+
+Forbidden default behavior:
+
+- One short paragraph per participant followed by a final conclusion.
+- Generic objections that do not name the claim being challenged.
+- Treating assumptions as facts.
+- Skipping customer/market/technical evidence gaps because a narrative sounds plausible.
+- Letting `Room Essence` replace the visible exchange.
+
 ## Durable State
 
 Interaction state is explicit markdown under `~/.x/projects/<project-key>/`:

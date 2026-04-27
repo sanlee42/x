@@ -74,6 +74,48 @@ Speaking:
 
 Do not answer a room turn as an undifferentiated main agent unless root asks for main-only logistics. In council rooms, include named participant turns in the normal assistant reply, then record the visible turns with `interaction-turn --actor <participant> --to <root|participant|all>`. Summary/synthesis is a separate explicit step and must not replace participant turns.
 
+## Council Depth Contract
+
+`$x council` is a structured working room, not a one-round summary. Unless root explicitly asks for a quick take, main must make the council useful enough that root would not need to open a separate freeform session to get real debate.
+
+For the first substantive council response on a topic, use this shape:
+
+```text
+Room: <interaction-id>
+Participants: root, main, founder, cto, ...
+
+Decision Frame:
+- what root is actually deciding
+- what would make the answer change
+
+Round 1 - Initial Positions:
+- <participant> -> root: stance, reasons, evidence/assumptions, risk, decision implication
+
+Round 2 - Cross-Examination:
+- <participant> -> <participant/all>: named challenge to a specific claim
+- <participant> -> <participant/all>: response or refinement
+
+Options:
+- A: ...
+- B: ...
+- C: ...
+
+Evidence Needed:
+- test/interview/data that would change the recommendation
+
+Main:
+- concise facilitator note only; no final decision unless root asks to synthesize or decide
+```
+
+Depth requirements:
+
+- Do not collapse participants into one-paragraph takes followed by a conclusion.
+- Separate facts, assumptions, judgments, and open evidence gaps.
+- Make `challenger` attack the strongest live claim by name, not just add a generic warning.
+- Make `market-intelligence` distinguish known facts from assumptions and missing customer/competitor proof.
+- Make `cto`, `product-lead`, and `gtm` respond to constraints raised by other participants when those constraints materially affect the decision.
+- Do not write `Room Essence` or treat the room as resolved until root asks to synthesize, decide, close, or convert to architect intake.
+
 ## Required Context
 
 Read these first:
@@ -109,13 +151,19 @@ The script owns `.x/project/profile.md` in the product repo and runtime markdown
 ## Roles
 
 - `root`: the user; owns direction, final merge authority, irreversible decisions, and explicit merge/push/PR authorization.
-- `main agent`: orchestrates, does repo/context intake, writes `.x` state, materializes the integration worktree, starts gated lane worktrees, runs gates, and reports to root.
+- `main agent`: orchestrates, does repo/context intake, writes `.x` state, materializes the integration worktree, starts gated lane worktrees, runs gates, performs mechanical lane integration, and reports to root.
 - `council participant views`: configurable upper-layer participant cards, with default templates for `founder`, `cto`, `product-lead`, `market-intelligence`, `gtm`, and `challenger`; they produce turns and optional formal participant briefs for root decision-making and must not manage execution. `product-lead` owns product shape and user path, not Acceptance/QA. `market-intelligence` provides external facts and does not decide. `gtm` owns channel, sales, launch, conversion, pricing, and packaging actions.
 - `architect`: co-creates the Architecture Brief with root, converts accepted direction into technical boundaries, produces the Architect Execution Plan, observes execution, issues architect directives, and performs architect integration review.
 - `engineer`: implements only one bounded lane attempt or fix attempt and returns patch evidence.
 - `reviewer`: independently reviews patch evidence against the contract, execution plan, lane, task, diff, tests, and repo constraints.
 
 Role package receivers must not spawn child agents or write final ledger state.
+
+Main must not act as architect, engineer, or reviewer during normal x execution. Main may do sanity checks for missing fields, contradictions, repo-rule conflicts, and gate failures, but architecture/design judgment, Technical Contract direction, lane risk classification, and architect `merge-ok` decisions belong to the architect role/subagent. Main routes those decisions to architect and records the resulting durable state.
+
+Native reviewer execution must run in a reviewer role/subagent, not inline in main during normal execution. Main records attempt evidence, spawns the reviewer subagent with the native reviewer command/package context, then continues orchestration while the reviewer runs `codex review --uncommitted`.
+
+Architect integration review should run in an architect role/subagent whenever architect judgment is required. It is not native code review, but it also should not consume main's attention as a deep-review task. Main should spawn architect with the lane/review/verification summary, then write the returned `architect-review` state.
 
 All roles load project context before answering: `PROJECT_CONSTRAINTS.md`, `AGENTS.md`, optional `.x/project/profile.md`, then their x package. If they conflict, earlier files win; if the package conflicts with project context, the role reports the conflict instead of guessing.
 
@@ -124,6 +172,7 @@ The root control root normally starts on `master/main`. The run's materialized w
 ## Core Boundaries
 
 - No accepted Architecture Brief, no Technical Contract or materialized execution worktree.
+- Main owns orchestration and state, not architecture/design authorship. If architecture input is needed, main spawns architect and records architect output instead of inventing the direction.
 - Interaction outputs are advisory until root records a decision; accepted Architect Intakes require an accepted root decision.
 - Root-facing council rooms are visible conversations first. Main must show the actual participant turns to root in the normal assistant reply and record them with `interaction-turn`; synthesis/proposal is a later step and must not replace the visible exchange.
 - Every recorded interaction turn must have a clear speaker and audience. Use `interaction-turn --actor <participant> --to <root|participant|all>` so participants know whether they are answering root, another participant, or the whole room.

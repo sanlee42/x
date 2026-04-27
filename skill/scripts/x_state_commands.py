@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 from x_state_common import *
@@ -526,7 +527,11 @@ def record_attempt_result(
     task_text = replace_section(task_text, "Result", f"Latest attempt result: {attempt.stem} ({status})")
     save(task, task_text, dry_run)
     phase = "Fix Loop" if status == "blocked" or blocking_present(blockers) else "Review"
-    default_next = "Address attempt blockers before review." if phase == "Fix Loop" else f"Generate reviewer package for {attempt.stem}, then hand it to reviewer."
+    default_next = (
+        "Address attempt blockers before review."
+        if phase == "Fix Loop"
+        else f"Spawn a reviewer subagent to run native reviewer for {attempt.stem}."
+    )
     run_text = update_header(run, phase=phase, needs_user=needs_user)
     run_text = append_bullet(run_text, "Task Results", f"{attempt.stem}: {status} - {summary}")
     run_text = replace_section(run_text, "Validation and Acceptance", verification)
@@ -536,6 +541,7 @@ def record_attempt_result(
     run_text = append_event_text(run_text, f"Attempt result recorded: {attempt.stem}")
     save(run, run_text, dry_run)
     mark_lane_attempt_result(root, attempt, dry_run)
+    maybe_auto_native_review(root, run, task, attempt, lane, status, blockers, dry_run)
 
 
 def command_attempt_result(args: argparse.Namespace) -> None:
@@ -554,6 +560,66 @@ def command_attempt_result(args: argparse.Namespace) -> None:
         next_action=args.next_action,
         dry_run=args.dry_run,
     )
+
+
+def maybe_auto_native_review(
+    root: Path,
+    run: Path,
+    task: Path,
+    attempt: Path,
+    lane: Path | None,
+    status: str,
+    blockers: str | None,
+    dry_run: bool,
+) -> None:
+    if dry_run or not auto_native_review_enabled():
+        return
+    if lane is None:
+        return
+    if status != "done" or blocking_present(blockers):
+        return
+    if ready_or_open_review_for_attempt(root, attempt.stem):
+        return
+    from x_state_packages import command_package
+
+    command_package(
+        argparse.Namespace(
+            role="reviewer",
+            reviewer_backend="codex-native",
+            run_id=run.stem,
+            interaction_id=None,
+            council_role=None,
+            architect_intake_id=None,
+            task_id=task.stem,
+            attempt_id=attempt.stem,
+            review_id=None,
+            title=None,
+            package_id=None,
+            diff_stat=None,
+            diff_stat_file=None,
+            diff=None,
+            diff_file=None,
+            verification=None,
+            verification_file=None,
+            notes="Auto-triggered after attempt-result.",
+            notes_file=None,
+            next_action=None,
+            dry_run=False,
+        )
+    )
+
+
+def auto_native_review_enabled() -> bool:
+    value = os.environ.get("X_AUTO_NATIVE_REVIEW", "0").strip().lower()
+    return value not in {"0", "false", "no", "off"}
+
+
+def ready_or_open_review_for_attempt(root: Path, attempt_id: str) -> bool:
+    for review in files_for_header(root, "reviews", "Linked Attempt", attempt_id):
+        text = review.read_text(encoding="utf-8")
+        if header_value(text, "Status") not in {"superseded"}:
+            return True
+    return False
 
 
 def merge_ready_failures(root: Path, run: Path) -> list[str]:

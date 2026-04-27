@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import re
 import subprocess
 from pathlib import Path
@@ -42,10 +43,44 @@ LANE_TABLE_COLUMNS = (
     "serial-only",
     "shared-files",
 )
-VALID_LANE_RISK_LEVELS = {"standard", "high"}
+VALID_LANE_RISK_LEVELS = {"standard", "high", "critical"}
 VALID_LANE_SERIAL_ONLY = {"yes", "no"}
 LANE_ACTIVE_STATUSES = {"active", "code-changes-requested", "architect-changes-requested"}
 HEARTBEAT_STALE_MINUTES = 60
+STANDARD_REVIEW_SAMPLE_PERCENT = 50
+FORCED_CRITICAL_KEYWORDS = (
+    "public output",
+    "public schema",
+    "schema",
+    "shared interface",
+    "shared helper",
+    "cross-lane contract",
+    "cross lane contract",
+    "auth",
+    "authentication",
+    "authorization",
+    "security",
+    "privacy",
+    "data migration",
+    "migration",
+    "performance-sensitive",
+    "performance sensitive",
+    "hot path",
+    "public api",
+    "api contract",
+    "chatbi",
+)
+STANDARD_SAMPLE_TRIGGER_KEYWORDS = (
+    "public output",
+    "shared helper",
+    "parser",
+    "schema",
+    "abstraction",
+    "contract",
+    "boundary",
+    "low confidence",
+    "unclear",
+)
 
 
 def command_execution_plan(args: argparse.Namespace) -> None:
@@ -243,6 +278,7 @@ def architect_gate_failures(root: Path, run: Path, plan: Path | None) -> list[st
     task_ids = [lane["task-id"] for lane in lanes]
     for task_id in sorted({task_id for task_id in task_ids if task_ids.count(task_id) > 1}):
         failures.append(f"{plan.stem}: duplicate lane task {task_id}")
+    failures.extend(forced_critical_lane_failures(plan.stem, lanes))
     return failures
 
 
@@ -377,14 +413,64 @@ def lane_schema_failures(plan_id: str, lane: dict[str, str]) -> list[str]:
     shared_files = normalized_lane_choice(lane.get("shared-files", ""))
     failures = []
     if risk_level and risk_level not in VALID_LANE_RISK_LEVELS:
-        failures.append(f"{plan_id}: lane {lane_id} risk level must be standard or high")
+        failures.append(f"{plan_id}: lane {lane_id} risk level must be standard, high, or critical")
     if serial_only and serial_only not in VALID_LANE_SERIAL_ONLY:
         failures.append(f"{plan_id}: lane {lane_id} serial only must be yes or no")
     if serial_only == "yes" and concurrent_group and concurrent_group != "none":
         failures.append(f"{plan_id}: lane {lane_id} serial only yes cannot have concurrent group {lane.get('concurrent-group', '')}")
-    if shared_files and shared_files != "none" and risk_level and risk_level != "high":
-        failures.append(f"{plan_id}: lane {lane_id} shared files require risk level high")
+    if shared_files and shared_files != "none" and risk_level and risk_level != "critical":
+        failures.append(f"{plan_id}: lane {lane_id} shared files require risk level critical")
     return failures
+
+
+def forced_critical_lane_failures(plan_id: str, lanes: list[dict[str, str]]) -> list[str]:
+    failures = []
+    shared_file_counts: dict[str, int] = {}
+    for lane in lanes:
+        for token in surface_tokens(lane.get("shared-files", "")):
+            normalized = token.strip().lower()
+            if normalized and normalized not in {"none", "none."}:
+                shared_file_counts[normalized] = shared_file_counts.get(normalized, 0) + 1
+    for lane in lanes:
+        lane_id = lane.get("lane-id", "unknown")
+        risk_level = normalized_lane_choice(lane.get("risk-level", ""))
+        reasons = forced_critical_reasons(lane, shared_file_counts)
+        if reasons and risk_level != "critical":
+            failures.append(
+                f"{plan_id}: lane {lane_id} must use risk level critical ({', '.join(reasons)})"
+            )
+    return failures
+
+
+def forced_critical_reasons(lane: dict[str, str], shared_file_counts: dict[str, int] | None = None) -> list[str]:
+    text = " ".join(
+        lane.get(key, "")
+        for key in (
+            "lane-id",
+            "allowed-scope",
+            "forbidden-scope",
+            "verification",
+            "done-evidence",
+            "shared-files",
+        )
+    ).lower()
+    reasons = []
+    for keyword in FORCED_CRITICAL_KEYWORDS:
+        if keyword in text:
+            reasons.append(keyword)
+            break
+    shared_files = normalized_lane_choice(lane.get("shared-files", ""))
+    if shared_files and shared_files != "none" and "shared-files" not in reasons:
+        reasons.append("shared-files")
+    if shared_file_counts:
+        duplicated = [
+            token
+            for token in surface_tokens(lane.get("shared-files", ""))
+            if shared_file_counts.get(token.strip().lower(), 0) > 1
+        ]
+        if duplicated:
+            reasons.append("multiple-lanes-shared-module")
+    return reasons
 
 
 def normalized_lane_choice(value: str) -> str:
@@ -495,6 +581,7 @@ def command_lane_start(args: argparse.Namespace) -> None:
         dry_run=args.dry_run,
     )
     plan_text = plan.read_text(encoding="utf-8")
+    review_sample, review_sample_reason = lane_review_sample_decision(run.stem, lane_row, parse_plan_lanes(plan_text))
     content = read_template(LANE_TEMPLATE).format(
         lane_id=lane_id,
         status="active",
@@ -515,6 +602,8 @@ def command_lane_start(args: argparse.Namespace) -> None:
         concurrent_group=normalized_lane_choice(lane_row["concurrent-group"]),
         serial_only=normalized_lane_choice(lane_row["serial-only"]),
         shared_files=lane_row["shared-files"].strip(),
+        review_sample=review_sample,
+        review_sample_reason=review_sample_reason,
         runbook=section_content(plan_text, "Lane Session Ownership"),
         loop_policy=section_content(plan_text, "Loopback Triggers"),
         expected_artifacts=section_content(plan_text, "Expected Artifacts"),
@@ -528,6 +617,56 @@ def command_lane_start(args: argparse.Namespace) -> None:
     run_text = replace_section(run_text, "Next Action", args.next_action or f"Start implementation attempt for lane {lane_id}.")
     run_text = append_event_text(run_text, f"Lane started: {lane_id}")
     save(run, run_text, args.dry_run)
+
+
+def lane_review_sample_decision(run_id: str, lane_row: dict[str, str], lanes: list[dict[str, str]]) -> tuple[str, str]:
+    risk_level = normalized_lane_choice(lane_row.get("risk-level", ""))
+    if risk_level != "standard":
+        return "n/a", f"{risk_level or 'unknown'} risk uses risk gate"
+    triggers = standard_sample_triggers(lane_row)
+    if triggers:
+        return "yes", "trigger: " + ", ".join(triggers)
+    standard_lanes = [
+        lane
+        for lane in lanes
+        if normalized_lane_choice(lane.get("risk-level", "")) == "standard" and not standard_sample_triggers(lane)
+    ]
+    if not standard_lanes:
+        return "no", "no standard sample candidates"
+    sample_count = max(1, (len(standard_lanes) * STANDARD_REVIEW_SAMPLE_PERCENT + 99) // 100)
+    ranked = sorted(
+        standard_lanes,
+        key=lambda lane: stable_sample_key(run_id, lane.get("lane-id", "")),
+    )
+    sampled = {lane.get("lane-id", "") for lane in ranked[:sample_count]}
+    if lane_row.get("lane-id", "") in sampled:
+        return "yes", f"stable {STANDARD_REVIEW_SAMPLE_PERCENT}% sample"
+    return "no", f"stable {STANDARD_REVIEW_SAMPLE_PERCENT}% sample not selected"
+
+
+def standard_sample_triggers(lane_row: dict[str, str]) -> list[str]:
+    text = " ".join(
+        lane_row.get(key, "")
+        for key in (
+            "lane-id",
+            "allowed-scope",
+            "forbidden-scope",
+            "verification",
+            "done-evidence",
+            "shared-files",
+        )
+    ).lower()
+    triggers = []
+    for keyword in STANDARD_SAMPLE_TRIGGER_KEYWORDS:
+        if keyword in text:
+            triggers.append(keyword)
+    if normalized_lane_choice(lane_row.get("shared-files", "")) not in {"", "none"}:
+        triggers.append("shared-files")
+    return sorted(set(triggers))
+
+
+def stable_sample_key(run_id: str, lane_id: str) -> str:
+    return hashlib.sha256(f"{run_id}:{lane_id}".encode("utf-8")).hexdigest()
 
 
 def lane_worktree_default(integration_worktree: Path, lane_row: dict[str, str], explicit: str | None) -> Path:
@@ -616,6 +755,7 @@ def lane_status_summary(lane: Path) -> str:
         f"group={compact_state_value(header_value(text, 'Concurrent Group'))}",
         f"serial={compact_state_value(header_value(text, 'Serial Only'))}",
         f"shared={compact_state_value(header_value(text, 'Shared Files'))}",
+        f"sample={compact_state_value(header_value(text, 'Review Sample'))}",
         f"deep_review_required={deep_review_required_value(text)}",
         f"attempt={header_value(text, 'Last Attempt') or 'none'}",
         f"code-review={header_value(text, 'Code Review') or 'none'}",
@@ -650,6 +790,7 @@ def lane_heartbeats_summary(root: Path, run: Path) -> str:
                     f"group={compact_state_value(header_value(text, 'Concurrent Group'))}",
                     f"serial={compact_state_value(header_value(text, 'Serial Only'))}",
                     f"shared={compact_state_value(header_value(text, 'Shared Files'))}",
+                    f"sample={compact_state_value(header_value(text, 'Review Sample'))}",
                     f"deep_review_required={deep_review_required_value(text)}",
                     f"heartbeat={compact_state_value(header_value(text, 'Heartbeat Status'))}",
                     f"actor={compact_state_value(header_value(text, 'Heartbeat Actor'))}",
@@ -722,7 +863,8 @@ def deep_review_required_value(lane_text: str) -> str:
 def lane_deep_review_required(lane_text: str) -> bool:
     risk_level = normalized_lane_choice(header_value(lane_text, "Risk Level"))
     shared_files = normalized_lane_choice(header_value(lane_text, "Shared Files"))
-    return risk_level == "high" or shared_files not in {"", "none"}
+    review_sample = normalized_lane_choice(header_value(lane_text, "Review Sample"))
+    return risk_level in {"high", "critical"} or review_sample == "yes" or shared_files not in {"", "none"}
 
 
 def lanes_for_task(root: Path, run_id: str, task_id: str) -> list[Path]:
@@ -811,16 +953,85 @@ def mark_lane_code_review(root: Path, review: Path, dry_run: bool) -> None:
         return
     recommendation = header_value(review_text, "Recommendation")
     if recommendation == "ready":
-        status = "code-review-ready"
+        status = ready_lane_status_after_code_review(root, lane, attempt, review)
     elif recommendation == "changes-requested":
         status = "code-changes-requested"
     else:
         status = "blocked"
     lane_text = lane.read_text(encoding="utf-8")
+    lane_text = update_lane_review_sample_from_review(lane_text, attempt.read_text(encoding="utf-8"), review_text)
     lane_text = replace_line(lane_text, "Status: ", status)
     lane_text = replace_line(lane_text, "Code Review: ", review.stem)
     lane_text = append_event_text(lane_text, f"Code review recorded: {review.stem} ({recommendation})")
     save(lane, lane_text, dry_run)
+
+
+def ready_lane_status_after_code_review(root: Path, lane: Path, attempt: Path, review: Path) -> str:
+    lane_text = update_lane_review_sample_from_review(
+        lane.read_text(encoding="utf-8"),
+        attempt.read_text(encoding="utf-8"),
+        review.read_text(encoding="utf-8"),
+    )
+    risk_level = lane_effective_risk_level(root, lane, lane_text)
+    if risk_level in {"high", "critical"}:
+        return "architect-review-required"
+    return "integration-ready"
+
+
+def update_lane_review_sample_from_review(lane_text: str, attempt_text: str, review_text: str) -> str:
+    if normalized_lane_choice(header_value(lane_text, "Risk Level")) != "standard":
+        return lane_text
+    if normalized_lane_choice(header_value(lane_text, "Review Sample")) == "yes":
+        return lane_text
+    triggers = review_sampling_triggers(attempt_text, review_text)
+    if not triggers:
+        return lane_text
+    updated = upsert_line_after(lane_text, "Review Sample: ", "yes", "Shared Files: ")
+    updated = upsert_line_after(
+        updated,
+        "Review Sample Reason: ",
+        "trigger: " + ", ".join(triggers),
+        "Review Sample: ",
+    )
+    return updated
+
+
+def review_sampling_triggers(attempt_text: str, review_text: str) -> list[str]:
+    combined = "\n".join(
+        [
+            section_content(review_text, "Summary"),
+            section_content(review_text, "Blocking Findings"),
+            section_content(review_text, "Non-Blocking Findings"),
+            section_content(review_text, "Residual Risk"),
+        ]
+    ).lower()
+    triggers = []
+    for keyword in ("abstraction", "contract", "boundary", "low confidence", "unclear"):
+        if keyword in combined:
+            triggers.append(keyword)
+    if header_value(attempt_text, "Kind") == "fix" or header_value(attempt_text, "Source Review") not in {"", "none"}:
+        triggers.append("fix-loop")
+    verification = section_content(attempt_text, "Verification").lower()
+    if ("fake" in verification or "mock" in verification) and not any(
+        marker in verification for marker in ("real", "smoke", "integration", "manual")
+    ):
+        triggers.append("mock-only-verification")
+    return sorted(set(triggers))
+
+
+def lane_effective_risk_level(root: Path, lane: Path, lane_text: str | None = None) -> str:
+    text = lane_text if lane_text is not None else lane.read_text(encoding="utf-8")
+    lane_id = lane_display_id(lane)
+    plan_id = header_value(text, "Linked Plan")
+    if plan_id:
+        try:
+            plan = resolve_state_file(root, "execution-plans", plan_id)
+            risk_level = normalized_lane_choice(lane_row_for_id(plan, lane_id).get("risk-level", ""))
+            if risk_level:
+                return risk_level
+        except SystemExit:
+            pass
+    return normalized_lane_choice(header_value(text, "Risk Level"))
 
 
 def command_architect_review(args: argparse.Namespace) -> None:
@@ -908,13 +1119,17 @@ def apply_architect_review_result(
     recommendation = args.recommendation
     lane_id = lane_display_id(lane)
     status_map = {
-        "merge-ok": "architect-merge-ok",
         "changes-requested": "architect-changes-requested",
         "blocked": "blocked",
         "replan": "replan-required",
     }
     lane_text = lane.read_text(encoding="utf-8")
-    lane_text = replace_line(lane_text, "Status: ", status_map[recommendation])
+    next_status = (
+        architect_merge_ok_status(root, lane, attempt.stem)
+        if recommendation == "merge-ok"
+        else status_map[recommendation]
+    )
+    lane_text = replace_line(lane_text, "Status: ", next_status)
     lane_text = replace_line(lane_text, "Architect Review: ", review.stem)
     lane_text = append_event_text(lane_text, f"Architect review recorded: {review.stem} ({recommendation})")
     save(lane, lane_text, args.dry_run)
@@ -930,9 +1145,57 @@ def apply_architect_review_result(
         run_text = append_bullet(run_text, "Fix Loop", f"{review.stem}: architect {recommendation}")
     if recommendation == "replan":
         run_text = upsert_line_after(run_text, "Architect Gate Status: ", "failed", "Gate Status: ")
-    run_text = replace_section(run_text, "Next Action", args.next_action or architect_review_next_action(recommendation, lane_id))
+    if recommendation == "merge-ok" and next_status == "architect-review-required":
+        default_next_action = f"Record another distinct architect merge-ok for lane {lane_id} before integration."
+    else:
+        default_next_action = architect_review_next_action(recommendation, lane_id)
+    run_text = replace_section(run_text, "Next Action", args.next_action or default_next_action)
     run_text = append_event_text(run_text, f"Architect review recorded: {review.stem}")
     save(run, run_text, args.dry_run)
+
+
+def architect_merge_ok_status(root: Path, lane: Path, attempt_id: str) -> str:
+    required = architect_merge_ok_required_for_lane(root, lane)
+    if required <= 1:
+        return "integration-ready"
+    count = len(merge_ok_architect_reviews_for_attempt(root, lane.read_text(encoding="utf-8"), lane_display_id(lane), attempt_id))
+    return "integration-ready" if count >= required else "architect-review-required"
+
+
+def architect_merge_ok_required_for_lane(root: Path, lane: Path) -> int:
+    lane_text = lane.read_text(encoding="utf-8")
+    risk_level = lane_effective_risk_level(root, lane, lane_text)
+    if risk_level == "critical":
+        return 2
+    if risk_level == "high":
+        return 1
+    if normalized_lane_choice(header_value(lane_text, "Review Sample")) == "yes":
+        return 1
+    return 0
+
+
+def merge_ok_architect_reviews_for_attempt(root: Path, lane_text: str, lane_id: str, attempt_id: str) -> list[Path]:
+    run_id = header_value(lane_text, "Linked Run")
+    plan_id = header_value(lane_text, "Linked Plan")
+    reviews = []
+    seen: set[str] = set()
+    for review in files_for_run(root, "architect-reviews", run_id):
+        review_text = review.read_text(encoding="utf-8")
+        if review.stem in seen:
+            continue
+        if header_value(review_text, "Status") == "superseded":
+            continue
+        if header_value(review_text, "Recommendation") != "merge-ok":
+            continue
+        if header_value(review_text, "Linked Plan") != plan_id:
+            continue
+        if header_value(review_text, "Linked Lane") != lane_id:
+            continue
+        if header_value(review_text, "Linked Attempt") != attempt_id:
+            continue
+        seen.add(review.stem)
+        reviews.append(review)
+    return reviews
 
 
 def mark_source_architect_review_addressed(root: Path, attempt: Path, dry_run: bool) -> None:

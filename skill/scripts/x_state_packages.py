@@ -10,7 +10,7 @@ from x_state_directives import lane_work_directive_failures, merge_ready_directi
 from x_state_execution import lane_display_id, lane_for_attempt, lane_status_summary, lane_worktree, latest_execution_plan_for_run
 from x_state_integration import lane_integration_base, untracked_files
 from x_state_mailbox import open_mailbox_summary
-from x_state_reviews import command_review
+from x_state_reviews import command_review, native_review_findings, normalize_native_review_output
 from x_state_discussion import (
     compact,
     discussion_summary,
@@ -21,9 +21,6 @@ from x_state_discussion import (
     role_card_content,
     role_briefs_for_discussion,
 )
-
-
-NATIVE_REVIEW_RECOMMENDATIONS = {"ready", "changes-requested", "blocked"}
 
 
 def project_context(root: Path) -> str:
@@ -127,6 +124,92 @@ def architect_control_board(root: Path, run: Path) -> str:
     return "\n".join(lines)
 
 
+def lane_risk_dependency_summary(root: Path, run_id: str) -> str:
+    plan = latest_execution_plan_for_run(root, run_id)
+    lines = []
+    if plan:
+        plan_text = plan.read_text(encoding="utf-8")
+        lines.append(f"- Plan: {plan.stem}")
+        lines.append(f"- Shared Contract Surfaces: {compact(section_content(plan_text, 'Shared Contract Surfaces'), limit=900)}")
+        lines.append(f"- Dependency Graph: {compact(section_content(plan_text, 'Task Dependency Graph'), limit=900)}")
+        lines.append(f"- Integration Order: {compact(section_content(plan_text, 'Integration Order'), limit=900)}")
+    lanes = files_for_run(root, "lanes", run_id)
+    if not lanes:
+        lines.append("- Lanes: none")
+        return "\n".join(lines)
+    lines.append("- Lanes:")
+    for lane in lanes:
+        text = lane.read_text(encoding="utf-8")
+        lines.append(
+            "  - "
+            + "; ".join(
+                [
+                    lane_display_id(lane),
+                    f"status={header_value(text, 'Status') or 'unknown'}",
+                    f"risk={header_value(text, 'Risk Level') or 'unknown'}",
+                    f"sample={header_value(text, 'Review Sample') or 'pending'}",
+                    f"shared={header_value(text, 'Shared Files') or 'none'}",
+                    f"attempt={header_value(text, 'Last Attempt') or 'none'}",
+                ]
+            )
+        )
+    return "\n".join(lines)
+
+
+def run_review_summary(root: Path, run_id: str) -> str:
+    lines = []
+    reviews = files_for_run(root, "reviews", run_id)
+    if reviews:
+        lines.append("Code Reviews:")
+        for review in reviews[-8:]:
+            text = review.read_text(encoding="utf-8")
+            lines.append(
+                f"- {review.stem}: recommendation={header_value(text, 'Recommendation') or 'unknown'}; "
+                f"severity={header_value(text, 'Severity') or 'unknown'}; "
+                f"bounded={header_value(text, 'Bounded Fix') or 'unknown'}; "
+                f"escalation={header_value(text, 'Escalation Reason') or 'unknown'}; "
+                f"attempt={header_value(text, 'Linked Attempt') or 'unknown'}"
+            )
+    else:
+        lines.append("Code Reviews:\n- none")
+    architect_reviews = files_for_run(root, "architect-reviews", run_id)
+    if architect_reviews:
+        lines.append("Architect Reviews:")
+        for review in architect_reviews[-8:]:
+            text = review.read_text(encoding="utf-8")
+            lines.append(
+                f"- {review.stem}: recommendation={header_value(text, 'Recommendation') or 'unknown'}; "
+                f"lane={header_value(text, 'Linked Lane') or 'unknown'}; "
+                f"attempt={header_value(text, 'Linked Attempt') or 'unknown'}"
+            )
+    else:
+        lines.append("Architect Reviews:\n- none")
+    return "\n".join(lines)
+
+
+def run_verification_summary(root: Path, run_id: str) -> str:
+    plan = latest_execution_plan_for_run(root, run_id)
+    lines = []
+    if plan:
+        plan_text = plan.read_text(encoding="utf-8")
+        lines.append(
+            f"- Plan Final Verification: {header_value(plan_text, 'Final Verification Status') or 'unknown'}; "
+            f"evidence={compact(section_content(plan_text, 'Final Verification Evidence'), limit=700)}"
+        )
+    attempts = files_for_run(root, "attempts", run_id)
+    if attempts:
+        lines.append("- Attempts:")
+        for attempt in attempts[-8:]:
+            text = attempt.read_text(encoding="utf-8")
+            lines.append(
+                f"  - {attempt.stem}: status={header_value(text, 'Status') or 'unknown'}; "
+                f"verification={compact(section_content(text, 'Verification'), limit=700)}"
+            )
+    else:
+        lines.append("- Attempts: none")
+    return "\n".join(lines)
+
+
 def package_payload(
     root: Path,
     *,
@@ -162,20 +245,30 @@ def package_payload(
             source_architect_review_text = source_architect_review.read_text(encoding="utf-8")
     if role == "architect":
         purpose = "Co-create or revise the Architecture Brief, Technical Contract, or Architect Execution Plan for the current x run."
+        risk_summary = lane_risk_dependency_summary(root, run.stem)
+        review_summary = run_review_summary(root, run.stem)
+        verification_summary = run_verification_summary(root, run.stem)
         payload = f"""Run:
-{run_text}
+- ID: {run.stem}
+- Status: {header_value(run_text, 'Status') or 'unknown'}
+- Phase: {header_value(run_text, 'Current Phase') or 'unknown'}
 
-Execution:
-{execution}
+State References:
+- Ledger: {ledger}
+- Contract: {contract.stem if contract else 'none'}
+- Execution Plan: {execution_plan.stem if execution_plan else 'none'}
 
 Architect Control Board:
 {architect_control_board(root, run)}
 
-Ledger:
-{ledger_text}
+Risk and Dependency Summary:
+{risk_summary}
 
-Recent x state:
-{recent_state_summary(root, run.stem)}
+Review Summary:
+{review_summary}
+
+Verification Summary:
+{verification_summary}
 
 Accepted architect intakes:
 {accepted_intakes_summary(root, architect_intakes)}
@@ -226,37 +319,55 @@ Notes:
         if not attempt_has_result(attempt_text):
             raise SystemExit(f"attempt has no result evidence: {attempt.stem}")
         purpose = "Review one attempt against the Technical Contract, Engineer Task, diff, verification, and repo constraints."
+        lane_text = lane.read_text(encoding="utf-8") if lane else ""
         payload = f"""Technical Contract:
-{contract_text}
+- ID: {contract.stem if contract else 'none'}
+- Required Verification: {compact(section_content(contract_text, 'Required Verification'), limit=700)}
+- Loopback Conditions: {compact(section_content(contract_text, 'Loopback Conditions'), limit=700)}
 
 Architect Execution Plan:
-{execution_plan_text}
+- ID: {execution_plan.stem if execution_plan else 'none'}
+- Reviewer Criteria: {compact(section_content(execution_plan_text, 'Reviewer Criteria'), limit=700)}
+- Verification Matrix: {compact(section_content(execution_plan_text, 'Verification Matrix'), limit=700)}
 
 Lane:
-{lane_text}
-
-Execution Boundary:
-{execution}
+- ID: {lane_display_id(lane) if lane else 'none'}
+- Allowed Scope: {compact(section_content(lane_text, 'Allowed Scope'), limit=700)}
+- Forbidden Scope: {compact(section_content(lane_text, 'Forbidden Scope'), limit=700)}
+- Risk Level: {header_value(lane_text, 'Risk Level') or 'unknown'}
+- Review Sample: {header_value(lane_text, 'Review Sample') or 'pending'} ({header_value(lane_text, 'Review Sample Reason') or 'none'})
 
 Engineer Task:
-{task_text}
+- ID: {task.stem}
+- Goal: {compact(section_content(task_text, 'Goal'), limit=700)}
+- Required Verification: {compact(section_content(task_text, 'Required Verification'), limit=700)}
+- Expected Done Evidence: {compact(section_content(task_text, 'Expected Done Evidence'), limit=700)}
 
 Attempt Result:
-{attempt_text}
+- ID: {attempt.stem}
+- Changed Files: {compact(section_content(attempt_text, 'Changed Files'), limit=700)}
+- Implementation Summary: {compact(section_content(attempt_text, 'Implementation Summary'), limit=900)}
+- Verification: {compact(section_content(attempt_text, 'Verification'), limit=900)}
+- Blockers: {compact(section_content(attempt_text, 'Blockers'), limit=500)}
+- Residual Risk: {compact(section_content(attempt_text, 'Residual Risk'), limit=700)}
 
 Diff Stat:
 {diff_stat}
 
-Diff:
-{diff}
+Diff Reference:
+- From lane worktree: `git diff {header_value(lane_text, 'Integration Branch') or 'HEAD'}...HEAD` after computing the merge-base.
+- This supplemental package intentionally does not inline the full diff. Use the lane worktree and diff stat above for inspection.
 
-Verification:
+Source Review Findings:
+{review_text}
+
+Required Verification:
 {verification}
 
 Notes:
 {notes}
 """
-        expected = "Return recommendation ready, changes-requested, or blocked; blocking findings; non-blocking findings; verification assessment; residual risk; and next action."
+        expected = "Return recommendation ready, changes-requested, or blocked; severity p0/p1/p2/p3/none; bounded fix yes/no; escalation reason; blocking findings; non-blocking findings; verification assessment; residual risk; and next action."
     else:
         raise SystemExit(f"unsupported package role: {role}")
     return purpose, payload, expected
@@ -312,9 +423,9 @@ def native_reviewer_prompt(
     )
     return f"""# x Native Codex Reviewer Handoff
 
-Review one x lane attempt with native Codex review. The raw git diff is intentionally not included in this prompt; inspect it through:
+Review one x lane attempt with native Codex review. Current Codex review CLI diff selectors do not accept custom prompts; inspect the current lane worktree through:
 
-codex review --base {lane_base} -
+codex review --uncommitted
 
 Project Context Files:
 {project_context(root)}
@@ -379,13 +490,12 @@ next action: run merge-ready gate, start a fix attempt, loop back to architect, 
 """
 
 
-def run_codex_native_review(lane_tree: Path, lane_base: str, prompt: str) -> str:
-    command = ["codex", "review", "--base", lane_base, "-"]
+def run_codex_native_review(lane_tree: Path) -> str:
+    command = ["codex", "review", "--uncommitted"]
     try:
         completed = subprocess.run(
             command,
             cwd=lane_tree,
-            input=prompt,
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -404,45 +514,90 @@ def run_codex_native_review(lane_tree: Path, lane_base: str, prompt: str) -> str
     return completed.stdout.strip() or "No native review output."
 
 
-def native_review_recommendation(output: str) -> str | None:
-    for line in output.splitlines():
-        normalized = line.strip().lower()
-        if normalized.startswith(("- ", "* ")):
-            normalized = normalized[2:].strip()
-        if not normalized.startswith("recommendation:"):
-            continue
-        value = normalized.split(":", 1)[1].strip().strip("`*_ ")
-        value = value[:-1] if value.endswith(".") else value
-        if value in NATIVE_REVIEW_RECOMMENDATIONS:
-            return value
-    return None
+def record_native_review_raw_package(
+    root: Path,
+    args: argparse.Namespace,
+    *,
+    run: Path,
+    task: Path,
+    attempt: Path,
+    review: Path | None,
+    lane: Path,
+    lane_tree: Path,
+    lane_base: str,
+    verification: str,
+    notes: str,
+    output: str,
+) -> Path:
+    contract = latest_for_run(root, "contracts", run.stem)
+    execution_plan = latest_execution_plan_for_run(root, run.stem)
+    lane_text = lane.read_text(encoding="utf-8")
+    attempt_text = attempt.read_text(encoding="utf-8")
+    task_text = task.read_text(encoding="utf-8")
+    package_id = args.package_id or f"{today()}-reviewer-native-{attempt.stem}"
+    package_path = unique_path(state_dirs(root)["packages"], package_id)
+    payload = f"""Native Reviewer Source:
+- Command: `codex review --uncommitted`
+- Cwd: `{lane_tree}`
+- Stdin Prompt: none
+- Custom Prompt: none
+- Base Reference: `{lane_base}`
 
+State References:
+- Contract: {contract.stem if contract else 'none'}
+- Plan: {execution_plan.stem if execution_plan else 'none'}
+- Lane: {lane_display_id(lane)}
+- Task: {task.stem}
+- Attempt: {attempt.stem}
+- Source Review: {review.stem if review else 'none'}
 
-def indented_native_output(output: str) -> str:
-    body = output.strip() or "No native review output."
-    return "\n".join(f"    {line}" if line else "" for line in body.splitlines())
+Lane Scope:
+- Allowed Scope: {compact(section_content(lane_text, 'Allowed Scope'), limit=500)}
+- Forbidden Scope: {compact(section_content(lane_text, 'Forbidden Scope'), limit=500)}
+- Risk Level: {header_value(lane_text, 'Risk Level') or 'unknown'}
+- Review Sample: {header_value(lane_text, 'Review Sample') or 'pending'}
 
+Attempt Evidence:
+- Changed Files: {compact(section_content(attempt_text, 'Changed Files'), limit=700)}
+- Required Verification: {compact(section_content(task_text, 'Required Verification'), limit=700)}
+- Attempt Verification: {compact(verification, limit=900)}
 
-def native_review_summary(recommendation: str, explicit_recommendation: bool) -> str:
-    if explicit_recommendation:
-        return f"Native codex review completed with recommendation: {recommendation}."
-    return (
-        "Native codex review completed without an explicit recommendation line; "
-        "main must interpret and normalize the output before proceeding."
+Native Raw Output:
+
+{output.strip() or 'No native review output.'}
+
+Notes:
+{notes}
+"""
+    content = read_template(PACKAGE_TEMPLATE).format(
+        package_id=package_path.stem,
+        status="ready",
+        role="reviewer",
+        date=dt.date.today().isoformat(),
+        run_id=run.stem,
+        contract_id=contract.stem if contract else "none",
+        plan_id=execution_plan.stem if execution_plan else "none",
+        lane_id=lane_display_id(lane),
+        task_id=task.stem,
+        attempt_id=attempt.stem,
+        review_id=review.stem if review else "none",
+        control_root=header_value(run.read_text(encoding="utf-8"), "Control Root") or "unknown",
+        execution_status=header_value(run.read_text(encoding="utf-8"), "Execution Status") or UNMATERIALIZED,
+        execution_worktree=header_value(run.read_text(encoding="utf-8"), "Execution Worktree") or UNMATERIALIZED,
+        execution_branch=header_value(run.read_text(encoding="utf-8"), "Execution Branch") or UNMATERIALIZED,
+        lane_worktree=header_value(lane_text, "Worktree") or "none",
+        lane_branch=header_value(lane_text, "Branch") or "none",
+        purpose="Record native Codex reviewer output for normalization into an x Review.",
+        project_context=project_context(root),
+        payload=payload,
+        expected_return="No role response is expected from this package; native output is captured above and normalized into an x Review record.",
     )
-
-
-def native_review_findings(output: str, recommendation: str, explicit_recommendation: bool) -> tuple[str, str]:
-    raw_output = "Native Codex review output:\n\n" + indented_native_output(output)
-    if recommendation == "ready" and explicit_recommendation:
-        return "- None.", raw_output
-    if explicit_recommendation:
-        return raw_output, "- See blocking findings for the native review output."
-    return (
-        "No explicit `recommendation: ...` line was found. Main must interpret and normalize this output before proceeding.\n\n"
-        + raw_output,
-        "- None.",
-    )
+    write(package_path, content, args.dry_run)
+    run_text = update_header(run, phase="Package")
+    run_text = append_bullet(run_text, "Packages", f"{package_path.stem}: reviewer/native")
+    run_text = append_event_text(run_text, f"Native reviewer output package created: {package_path.stem}")
+    save(run, run_text, args.dry_run)
+    return package_path
 
 
 def record_codex_native_review(
@@ -474,36 +629,61 @@ def record_codex_native_review(
         notes=notes,
     )
     if args.dry_run:
+        print("Native Codex review command:")
+        print(f"codex review --uncommitted  # cwd: {lane_tree}")
+        print()
+        print("x context retained in state, but not passed as a custom prompt to native Codex review:")
         print(prompt)
         return
-    output = run_codex_native_review(lane_tree, lane_base, prompt)
-    parsed_recommendation = native_review_recommendation(output)
-    explicit_recommendation = parsed_recommendation is not None
-    recommendation = parsed_recommendation or "blocked"
-    blocking_findings, non_blocking_findings = native_review_findings(output, recommendation, explicit_recommendation)
-    no_recommendation_next_action = (
-        "Interpret and normalize native Codex review output before proceeding; "
-        "no explicit recommendation line was provided."
+    output = run_codex_native_review(lane_tree)
+    package_path = record_native_review_raw_package(
+        root,
+        args,
+        run=run,
+        task=task,
+        attempt=attempt,
+        review=review,
+        lane=lane,
+        lane_tree=lane_tree,
+        lane_base=lane_base,
+        verification=verification,
+        notes=notes,
+        output=output,
+    )
+    normalized = normalize_native_review_output(output)
+    recommendation = str(normalized["recommendation"])
+    severity = str(normalized["severity"])
+    bounded_fix = str(normalized["bounded_fix"])
+    escalation_reason = str(normalized["escalation_reason"])
+    blocking_findings, non_blocking_findings = native_review_findings(output, recommendation, escalation_reason)
+    normalized_next_action = (
+        "Start the bounded fix attempt generated by x."
+        if recommendation == "changes-requested" and severity in {"p3", "none"} and bounded_fix == "yes" and escalation_reason == "none"
+        else "Proceed according to the normalized x Review gate."
     )
     review_args = argparse.Namespace(
         title=args.title or "Native Codex review",
-        summary=native_review_summary(recommendation, explicit_recommendation),
+        summary=str(normalized["summary"]),
         recommendation=recommendation,
+        severity=severity,
+        bounded_fix=bounded_fix,
+        escalation_reason=escalation_reason,
         reviewed_diff=(
-            f"Native Codex reviewed the lane git diff via `codex review --base {lane_base} -` "
-            f"from `{lane_tree}`. The full raw diff was intentionally not embedded in the x prompt."
+            f"Native Codex reviewed staged, unstaged, and untracked lane worktree changes via "
+            f"`codex review --uncommitted` from `{lane_tree}`. x context was retained in state but not "
+            "passed as a custom prompt because current Codex review diff selectors reject custom prompts. "
+            f"Native raw output was stored first in package `{package_path.stem}`."
         ),
         verification=(
-            "Attempt verification supplied to native review:\n\n"
+            "Attempt verification recorded in x state:\n\n"
             f"{verification}\n\n"
             "Native review command completed successfully."
         ),
         blocking_findings=blocking_findings,
         non_blocking_findings=non_blocking_findings,
         residual_risk=(
-            "Native review output requires main normalization before proceeding."
-            if not explicit_recommendation
-            else "See native review output."
+            f"Normalized native review fields: severity={severity}; bounded_fix={bounded_fix}; "
+            f"escalation_reason={escalation_reason}."
         ),
         status="open",
         run_id=run.stem,
@@ -511,7 +691,7 @@ def record_codex_native_review(
         review_id=f"{today()}-codex-native-{attempt.stem}",
         loopback_target=None,
         needs_user=None,
-        next_action=no_recommendation_next_action if not explicit_recommendation else args.next_action,
+        next_action=args.next_action or normalized_next_action,
         dry_run=args.dry_run,
     )
     command_review(review_args)
@@ -562,7 +742,9 @@ def accepted_intake_summary_lines(intakes: list[Path]) -> str:
 
 def command_package(args: argparse.Namespace) -> None:
     root = repo_root(Path.cwd())
-    if args.reviewer_backend != "package" and args.role != "reviewer":
+    if args.role == "reviewer" and args.reviewer_backend is None:
+        args.reviewer_backend = "codex-native"
+    if args.reviewer_backend is not None and args.role != "reviewer":
         raise SystemExit("--reviewer-backend is only valid with --role reviewer")
     if args.role == "councilor":
         command_councilor_package(root, args)
@@ -609,9 +791,6 @@ def command_package(args: argparse.Namespace) -> None:
     verification = optional_text_arg(args, "verification", section_content(attempt.read_text(encoding="utf-8"), "Verification") if attempt else "Not provided.")
     notes = optional_text_arg(args, "notes", "None.")
     if args.role == "reviewer" and package_worktree is not None:
-        untracked = untracked_files(package_worktree)
-        if untracked:
-            raise SystemExit("reviewer package cannot capture untracked lane files: " + ", ".join(untracked))
         lane_base = lane_integration_base(package_worktree, header_value(lane.read_text(encoding="utf-8"), "Integration Branch") or "HEAD")
         if args.reviewer_backend == "codex-native":
             if task is None or attempt is None or lane is None:
@@ -630,6 +809,9 @@ def command_package(args: argparse.Namespace) -> None:
                 notes=notes,
             )
             return
+        untracked = untracked_files(package_worktree)
+        if untracked:
+            raise SystemExit("reviewer package cannot capture untracked lane files: " + ", ".join(untracked))
         diff_stat = optional_text_arg(args, "diff_stat", "")
         diff = optional_text_arg(args, "diff", "")
         if not has_content(diff_stat):
@@ -714,6 +896,9 @@ def command_councilor_package(root: Path, args: argparse.Namespace) -> None:
                     f"- Participants: {header_value(text, 'Participants')}.",
                     "- Reply as this participant view in the ongoing conversation; do not collapse the exchange into a neutral summary.",
                     "- Name who you are answering and keep other participants visible when their views matter.",
+                    "- Separate facts, assumptions, judgments, risks, and evidence gaps.",
+                    "- Challenge or answer at least one named claim from another participant when the transcript contains one relevant to your view.",
+                    "- Prefer a decision-useful deep turn over a short summary paragraph.",
                     "- Provide a visible conversational turn first; formal participant-brief fields may follow.",
                     "- Do not close, synthesize, or exit the interaction unless root/main explicitly asks for that step.",
                 ]
@@ -741,6 +926,8 @@ def command_councilor_package(root: Path, args: argparse.Namespace) -> None:
     purpose = f"Produce a {council_role} participant brief for the linked root interaction."
     expected_return = (
         "Return `Visible Turn` first: a conversational reply from this participant addressed to root and/or named participants. "
+        "The visible turn must be substantive: include stance, reasons, facts used, assumptions, risks, a named challenge or response when relevant, "
+        "and the evidence that would change the participant's mind. "
         "Then follow the participant card's `Output Format`, while still including participant-brief fields: stance/recommendation, rationale, "
         "objections or rejected options, risks, decisions needed, implications for architect, strongest objection, weakest assumption, "
         "evidence that would change the recommendation, and document-use notes for the later Room Essence. "

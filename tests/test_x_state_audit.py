@@ -139,7 +139,7 @@ class XStateAuditTests(XStateTestCase):
         self.x("materialize", "--run-id", "run-audit-bottlenecks", "--scope", "audit-bottlenecks")
         self.create_execution_plan(
             "run-audit-bottlenecks",
-            parallel_lanes=self.execution_plan_lane_table(risk_level="high", shared_files="README.md"),
+            parallel_lanes=self.execution_plan_lane_table(risk_level="critical", shared_files="README.md"),
         )
         self.x("architect-gate", "--run-id", "run-audit-bottlenecks")
         self.x("lane-start", "--run-id", "run-audit-bottlenecks", "--lane-id", "lane-llm", "--task-id", "task-llm")
@@ -147,7 +147,7 @@ class XStateAuditTests(XStateTestCase):
         self.x("attempt-start", "--task-id", "task-llm", "--kind", "implementation", "--attempt-id", "task-llm-a1", "--title", "Attempt")
         (self.lane_worktree("audit-bottlenecks") / "README.md").write_text("# repo\n\nwrong marker\n", encoding="utf-8")
         self.x("attempt-result", "--attempt-id", "task-llm-a1", "--changed-files", "README.md", "--summary", "Wrong marker.", "--verification", "Inspected README.", "--residual-risk", "Needs review.")
-        self.x("package", "--role", "reviewer", "--run-id", "run-audit-bottlenecks", "--task-id", "task-llm", "--attempt-id", "task-llm-a1", "--package-id", "pkg-reviewer")
+        self.x("package", "--role", "reviewer", "--reviewer-backend", "package", "--run-id", "run-audit-bottlenecks", "--task-id", "task-llm", "--attempt-id", "task-llm-a1", "--package-id", "pkg-reviewer")
         reviewer_package = self.package_file("pkg-reviewer")
         for index in range(1, 3):
             self.x(

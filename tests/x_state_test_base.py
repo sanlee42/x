@@ -44,6 +44,7 @@ class XStateTestCase(unittest.TestCase):
     def x(self, *args: str, check: bool = True, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
         env["X_HOME"] = str(self.x_home)
+        env.setdefault("X_AUTO_NATIVE_REVIEW", "0")
         return subprocess.run(
             [sys.executable, str(SCRIPT), *args],
             cwd=cwd or self.repo,

@@ -64,9 +64,11 @@ Cleanup v1 only removes lane worktrees whose lane state is `Integrated: yes`, la
 - No attempt, no engineer package.
 - No attempt result / patch evidence, no reviewer package.
 - `review --recommendation ready` cannot include blocking findings.
+- Review severity order is `p0 > p1 > p2 > p3 > none`; `ready` cannot use `p0`, `p1`, or `p2`.
+- Native review output that cannot be normalized must use `Escalation Reason: unstructured-native-output` and must not auto-start a fix attempt.
 - Reviewer `ready` alone does not allow integration.
 - No architect `merge-ok`, no `integrate`; architect `merge-ok` requires evidence across architecture fit, abstraction, maintainability, performance, correctness, security/privacy, observability, verification, product acceptance, and integration risk.
-- High-risk lanes require two distinct `merge-ok` architect review records linked to the latest attempt before `integrate` or `gate --mode merge-ready` can pass. Older reviews do not count after a fix attempt starts.
+- Unsampled standard lanes may integrate after ready review. Standard lanes selected for sampling and high-risk lanes require one `merge-ok`; critical lanes require two distinct `merge-ok` architect review records linked to the latest attempt before `integrate` or `gate --mode merge-ready` can pass. Older reviews do not count after a fix attempt starts.
 - Architect `changes-requested` starts a lane fix loop; architect `replan` blocks lane work until a new plan is accepted and gated.
 - Open architect `pause-lane` directives block new attempts, role packages, architect review, and integration for that lane until `resume-lane`.
 - Open architect `replan` directives mark the plan `replan-required` and block lower lane work until a new plan passes readiness.

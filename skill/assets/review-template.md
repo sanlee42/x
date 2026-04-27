@@ -2,6 +2,9 @@
 
 Status: {status}
 Recommendation: {recommendation}
+Severity: {severity}
+Bounded Fix: {bounded_fix}
+Escalation Reason: {escalation_reason}
 Date: {date}
 Linked Run: {run_id}
 Linked Task: {task_id}

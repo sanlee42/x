@@ -10,9 +10,11 @@ from x_state_directives import lane_work_directive_failures, merge_ready_directi
 from x_state_execution import (
     lane_display_id,
     lane_deep_review_required,
+    architect_merge_ok_required_for_lane,
     lane_row_for_id,
     lane_path_for,
     lane_worktree,
+    merge_ok_architect_reviews_for_attempt,
     ready_review_for_attempt,
     require_architect_gate_passed,
 )
@@ -62,8 +64,8 @@ def lane_integration_failures(root: Path, lane: Path, lane_tree: Path) -> list[s
     failures: list[str] = []
     if header_value(text, "Integrated") == "yes":
         failures.append(f"{lane_id}: already integrated")
-    if header_value(text, "Status") != "architect-merge-ok":
-        failures.append(f"{lane_id}: latest architect review is not merge-ok")
+    if header_value(text, "Status") not in {"integration-ready", "architect-merge-ok"}:
+        failures.append(f"{lane_id}: lane is not integration-ready")
     attempt_id = header_value(text, "Last Attempt")
     if not attempt_id or attempt_id == "none":
         failures.append(f"{lane_id}: missing attempt")
@@ -81,28 +83,41 @@ def lane_integration_failures(root: Path, lane: Path, lane_tree: Path) -> list[s
 
 
 def architect_review_failures(root: Path, lane_id: str, lane_text: str, attempt_id: str) -> list[str]:
-    review_id = header_value(lane_text, "Architect Review")
-    if not review_id or review_id == "none":
-        if lane_deep_review_required(lane_text):
-            return [f"{lane_id}: deep review required; missing architect review"]
-        return [f"{lane_id}: missing architect review"]
-    architect_review = resolve_state_file(root, "architect-reviews", review_id)
-    architect_text = architect_review.read_text(encoding="utf-8")
     failures = []
-    if header_value(architect_text, "Recommendation") != "merge-ok":
-        failures.append(f"{lane_id}: architect review {review_id} is not merge-ok")
-    if header_value(architect_text, "Linked Attempt") != attempt_id:
-        failures.append(f"{lane_id}: architect review {review_id} does not cover latest attempt")
     risk_level, risk_failures = lane_risk_level(root, lane_id, lane_text)
     failures.extend(risk_failures)
-    if risk_level == "high":
-        merge_ok_reviews = merge_ok_architect_reviews_for_attempt(root, lane_text, lane_id, attempt_id)
-        if len(merge_ok_reviews) < 2:
-            failures.append(
-                f"{lane_id}: high-risk lane requires a second architect review pass for latest attempt "
-                f"(found {len(merge_ok_reviews)} merge-ok review record)"
-            )
+    required = architect_reviews_required_for_integration(root, lane_id, lane_text)
+    if required == 0:
+        return failures
+    merge_ok_reviews = merge_ok_architect_reviews_for_attempt(root, lane_text, lane_id, attempt_id)
+    if len(merge_ok_reviews) < required:
+        failures.append(architect_review_requirement_message(lane_id, risk_level, required, len(merge_ok_reviews)))
     return failures
+
+
+def architect_reviews_required_for_integration(root: Path, lane_id: str, lane_text: str) -> int:
+    run_id = header_value(lane_text, "Linked Run")
+    lane = lane_path_for(root, run_id, lane_id)
+    if not lane.exists():
+        return 1
+    return architect_merge_ok_required_for_lane(root, lane)
+
+
+def architect_review_requirement_message(lane_id: str, risk_level: str, required: int, found: int) -> str:
+    if risk_level == "critical":
+        return (
+            f"{lane_id}: critical-risk lane requires 2 distinct architect merge-ok review records "
+            f"for latest attempt (found {found})"
+        )
+    if risk_level == "high":
+        return (
+            f"{lane_id}: high-risk lane requires 1 architect merge-ok review record "
+            f"for latest attempt (found {found})"
+        )
+    return (
+        f"{lane_id}: standard lane selected for architect sampling requires 1 architect merge-ok "
+        f"review record for latest attempt (found {found})"
+    )
 
 
 def lane_risk_level(root: Path, lane_id: str, lane_text: str) -> tuple[str, list[str]]:
@@ -121,30 +136,6 @@ def lane_risk_level(root: Path, lane_id: str, lane_text: str) -> tuple[str, list
 
 def normalized_state_value(value: str) -> str:
     return " ".join(value.strip().split()).lower()
-
-
-def merge_ok_architect_reviews_for_attempt(root: Path, lane_text: str, lane_id: str, attempt_id: str) -> list[Path]:
-    run_id = header_value(lane_text, "Linked Run")
-    plan_id = header_value(lane_text, "Linked Plan")
-    reviews = []
-    seen: set[str] = set()
-    for review in files_for_run(root, "architect-reviews", run_id):
-        review_text = review.read_text(encoding="utf-8")
-        if review.stem in seen:
-            continue
-        if header_value(review_text, "Status") == "superseded":
-            continue
-        if header_value(review_text, "Recommendation") != "merge-ok":
-            continue
-        if header_value(review_text, "Linked Plan") != plan_id:
-            continue
-        if header_value(review_text, "Linked Lane") != lane_id:
-            continue
-        if header_value(review_text, "Linked Attempt") != attempt_id:
-            continue
-        seen.add(review.stem)
-        reviews.append(review)
-    return reviews
 
 
 def lane_patch(lane_tree: Path, lane_text: str) -> str:

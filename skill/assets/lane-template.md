@@ -15,6 +15,8 @@ Risk Level: {risk_level}
 Concurrent Group: {concurrent_group}
 Serial Only: {serial_only}
 Shared Files: {shared_files}
+Review Sample: {review_sample}
+Review Sample Reason: {review_sample_reason}
 Last Attempt: none
 Code Review: none
 Architect Review: none

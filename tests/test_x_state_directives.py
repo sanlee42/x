@@ -70,7 +70,7 @@ class XStateDirectiveTests(XStateTestCase):
             "--residual-risk",
             "None.",
         )
-        self.x("package", "--role", "reviewer", "--run-id", run_id, "--task-id", "task-llm", "--attempt-id", "task-llm-a1")
+        self.x("package", "--role", "reviewer", "--reviewer-backend", "package", "--run-id", run_id, "--task-id", "task-llm", "--attempt-id", "task-llm-a1")
         self.x(
             "review",
             "--run-id",
@@ -282,7 +282,7 @@ class XStateDirectiveTests(XStateTestCase):
         self.x("package", "--role", "engineer", "--run-id", "run-observation", "--task-id", "task-llm", "--attempt-id", "task-llm-a1")
         (self.lane_worktree("observation") / "README.md").write_text("# repo\n\nllm marker\n", encoding="utf-8")
         self.x("attempt-result", "--attempt-id", "task-llm-a1", "--changed-files", "README.md", "--summary", "Added marker.", "--verification", "Inspected README.", "--residual-risk", "None.")
-        self.x("package", "--role", "reviewer", "--run-id", "run-observation", "--task-id", "task-llm", "--attempt-id", "task-llm-a1")
+        self.x("package", "--role", "reviewer", "--reviewer-backend", "package", "--run-id", "run-observation", "--task-id", "task-llm", "--attempt-id", "task-llm-a1")
         self.x("review", "--run-id", "run-observation", "--attempt-id", "task-llm-a1", "--title", "Ready review", "--summary", "Ready.", "--recommendation", "ready", "--reviewed-diff", "README diff reviewed.", "--verification", "Verification sufficient.")
         self.approve_integrate_and_mark_green("run-observation", "task-llm-a1")
         self.x("gate", "--mode", "merge-ready", "--run-id", "run-observation")
